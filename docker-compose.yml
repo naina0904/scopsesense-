@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:16-alpine
+    container_name: scopesense-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "12345"
+      POSTGRES_DB: scopesense
+    ports:
+      - "5433:5432" # Bound to 5433 on host to avoid port conflict with proposal_db (5432)
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Message Broker Service
+  redis:
+    image: redis:7-alpine
+    container_name: scopesense-redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6380:6379" # Bound to 6380 on host to avoid port conflict with aiautomationtool-redis (6379)
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend API Service
+  backend-api:
+    image: scopesense-v2-backend-api:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scopesense-backend-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:12345@db:5432/scopesense"
+      REDIS_URL: "redis://redis:6379/0"
+      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+      GROQ_API_KEY: "${GROQ_API_KEY}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      LLM_PROVIDER: "${LLM_PROVIDER}"
+      EMBEDDING_PROVIDER: "local"
+      OLLAMA_HOST: "http://host.docker.internal:11434"
+      JWT_SECRET: "${JWT_SECRET}"
+      UPLOADS_DIR: "/app/data/uploads"
+      # HuggingFace model cache — points to the shared volume
+      # so the SentenceTransformer model is downloaded once
+      # and reused across restarts and rebuilds.
+      SENTENCE_TRANSFORMERS_HOME: "/app/data/hf_cache"
+      HF_HOME: "/app/data/hf_cache"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ./backend:/app/backend
+      - shared_data:/app/data
+      - hf_cache:/app/data/hf_cache
+      - memory_storage:/app/backend/memory/storage
+      # Mount the parent directory containing validation repos, so the backend can read external git repos
+      - c:/Users/Raghuram/Desktop/AI:/app/AI
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Background Worker Service
+  backend-worker:
+    image: scopesense-v2-backend-worker:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scopesense-backend-worker
+    command: celery -A backend.tasks.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: "postgresql://postgres:12345@db:5432/scopesense"
+      REDIS_URL: "redis://redis:6379/0"
+      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+      GROQ_API_KEY: "${GROQ_API_KEY}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      LLM_PROVIDER: "${LLM_PROVIDER}"
+      EMBEDDING_PROVIDER: "local"
+      OLLAMA_HOST: "http://host.docker.internal:11434"
+      UPLOADS_DIR: "/app/data/uploads"
+      # HuggingFace model cache — shared with the API container
+      SENTENCE_TRANSFORMERS_HOME: "/app/data/hf_cache"
+      HF_HOME: "/app/data/hf_cache"
+    volumes:
+      - ./backend:/app/backend
+      - shared_data:/app/data
+      - hf_cache:/app/data/hf_cache
+      - memory_storage:/app/backend/memory/storage
+      # Mount the parent directory containing validation repos, so the worker can read external git repos
+      - c:/Users/Raghuram/Desktop/AI:/app/AI
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend-api:
+        condition: service_healthy
+
+
+  # React/Vite Frontend Client
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: "http://localhost:8000"
+        VITE_WS_URL: "ws://localhost:8000"
+    container_name: scopesense-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend-api
+
+volumes:
+  db_data:
+  redis_data:
+  shared_data:
+  memory_storage:
+  # Persists HuggingFace model cache across container
+  # restarts and rebuilds — prevents re-downloading
+  # the SentenceTransformer model every time.
+  hf_cache:

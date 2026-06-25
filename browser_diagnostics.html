@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScopeSense API Payload Diagnostics</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007acc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #007acc;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #005a9c;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5a6268;
+        }
+        button.warning {
+            background-color: #dc3545;
+        }
+        button.warning:hover {
+            background-color: #c82333;
+        }
+        .output {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .json-key {
+            color: #9cdcfe;
+        }
+        .json-string {
+            color: #ce9178;
+        }
+        .json-number {
+            color: #b5cea8;
+        }
+        .json-boolean {
+            color: #569cd6;
+        }
+        .json-null {
+            color: #569cd6;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.loading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .warning-text {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .success-text {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .info-text {
+            color: #17a2b8;
+            font-weight: bold;
+        }
+        .code {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 5px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .card h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        .field-row {
+            margin: 8px 0;
+            padding: 8px;
+            background-color: white;
+            border-radius: 3px;
+        }
+        .field-label {
+            font-weight: bold;
+            color: #333;
+            display: block;
+        }
+        .field-value {
+            color: #666;
+            margin-top: 4px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 ScopeSense API Payload Diagnostics</h1>
+        <p>This tool captures the exact API response that the frontend receives, helping diagnose why UI might show unexpected data.</p>
+
+        <div class="button-group">
+            <button onclick="captureLatestAuditPayload()">1️⃣ Capture /audit/latest Payload</button>
+            <button class="secondary" onclick="clearOutput()">Clear Output</button>
+            <button class="secondary" onclick="exportDiagnostics()">📥 Export JSON</button>
+        </div>
+
+        <h2>📊 API Response Capture</h2>
+        <div id="status" class="status info">Ready to capture API response. Click "Capture /audit/latest Payload" to begin.</div>
+        <div id="output" class="output"></div>
+
+        <h2>🔬 Data Integrity Analysis</h2>
+        <div id="analysis" class="section"></div>
+
+        <h2>🎯 Expected vs. Actual</h2>
+        <div class="comparison-grid">
+            <div class="card">
+                <h3>Expected Payload Structure</h3>
+                <div class="field-row">
+                    <span class="field-label">Type:</span>
+                    <span class="field-value">Object (result)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label">Has audit_id:</span>
+                    <span class="field-value">✓ Yes (UUID)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label">Has semantic_features:</span>
+                    <span class="field-value">✓ Yes (Array)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label">semantic_features items:</span>
+                    <span class="field-value">Should be clean (feature_name, assigned_developers, implementation_status)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label">Has documents field:</span>
+                    <span class="field-value">✗ No (should be removed)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-label">ZIP binary prefix:</span>
+                    <span class="field-value">✗ No (should be filtered client-side)</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Actual Payload Structure</h3>
+                <div id="actual-structure">
+                    <div class="field-row" style="color: #999;">
+                        <span class="field-label">Run diagnostic to see actual structure...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2>🛠️ Troubleshooting Guide</h2>
+        <div class="section">
+            <h3>If semantic_features contains "noisy" items:</h3>
+            <ol>
+                <li>Check if items have these suspicious patterns: "Retry", "Quick Action", "Session Handler" etc.</li>
+                <li>Check item names for <span class="code">PK\u0003\u0004</span> (ZIP binary prefix)</li>
+                <li>If noisy items exist → <span class="warning-text">Backend filtering failed (Phase 1B issue)</span></li>
+                <li>If they're filtered out → <span class="success-text">Frontend filtering working correctly</span></li>
+            </ol>
+
+            <h3>If documents field is present:</h3>
+            <ol>
+                <li>Check optional_intelligence.semantic_matches[*].documents</li>
+                <li>If present → <span class="warning-text">Sanitization failed (Phase 2E issue or pre-Phase 2E record)</span></li>
+                <li>If absent → <span class="success-text">Sanitization working correctly</span></li>
+            </ol>
+
+            <h3>If audit_id or generated_at doesn't match database:</h3>
+            <ol>
+                <li>Frontend might be showing old audit record</li>
+                <li>Check Redis cache or browser LocalStorage</li>
+                <li>Run fresh audit to regenerate</li>
+            </ol>
+        </div>
+
+        <h2>📋 Diagnostic Output</h2>
+        <div class="section">
+            <h3>Captured Audit Metadata</h3>
+            <table id="metadata-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="metadata-body">
+                    <tr><td colspan="3" style="text-align: center; color: #999;">No data captured yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h3>Captured semantic_features</h3>
+            <table id="features-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Developers</th>
+                        <th>Status</th>
+                        <th>Assessment</th>
+                    </tr>
+                </thead>
+                <tbody id="features-body">
+                    <tr><td colspan="5" style="text-align: center; color: #999;">No data captured yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h2>🔗 Frontend Code Trace</h2>
+        <div class="section">
+            <code>
+// FeaturesPage.jsx line 25-30:<br>
+const response = await axios.get(`${API_BASE_URL}/audit/latest`);<br>
+const latest = response.data.result || {};<br>
+const semanticFeatures = latest.semantic_features || [];<br>
+            </code>
+            <p><strong>Expected:</strong> response.data.result should contain audit_id, semantic_features (array of clean features), timeline_analysis, etc.</p>
+            <p><strong>Actual:</strong> <span id="trace-status">Click "Capture" to see actual structure</span></p>
+        </div>
+    </div>
+
+    <script>
+        let capturedData = null;
+        const API_BASE_URL = 'http://localhost:8000';
+
+        async function captureLatestAuditPayload() {
+            const statusDiv = document.getElementById('status');
+            const outputDiv = document.getElementById('output');
+            const analysisDiv = document.getElementById('analysis');
+
+            statusDiv.className = 'status loading';
+            statusDiv.textContent = '⏳ Fetching /audit/latest...';
+            outputDiv.innerHTML = '';
+            analysisDiv.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/audit/latest`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                capturedData = data;
+
+                // Display status
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Successfully captured payload from /audit/latest';
+
+                // Display full JSON
+                outputDiv.innerHTML = '<strong>Full Response (Pretty Printed):</strong><br>' + 
+                    JSON.stringify(data, null, 2)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+
+                // Run analysis
+                analyzePayload(data);
+
+                // Update actual structure
+                updateActualStructure(data);
+
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                outputDiv.innerHTML = `<span style="color: #ff6b6b;"><strong>Error Details:</strong><br>${error}</span>`;
+                analysisDiv.innerHTML = `<div class="status error">Failed to capture payload. Check CORS, API availability, and browser console for details.</div>`;
+            }
+        }
+
+        function analyzePayload(data) {
+            const analysisDiv = document.getElementById('analysis');
+            let html = '<h3>Analysis Results</h3>';
+
+            // Check structure
+            const hasResult = data && data.result;
+            const result = data.result || {};
+
+            html += `<div class="field-row">
+                <span class="field-label">Has response.result:</span>
+                <span class="field-value ${hasResult ? 'success-text' : 'warning-text'}">
+                    ${hasResult ? '✓ Yes' : '✗ No'}
+                </span>
+            </div>`;
+
+            // Check audit_id
+            const hasAuditId = result.audit_id;
+            html += `<div class="field-row">
+                <span class="field-label">Has audit_id:</span>
+                <span class="field-value ${hasAuditId ? 'success-text' : 'warning-text'}">
+                    ${hasAuditId ? `✓ Yes (${result.audit_id})` : '✗ No'}
+                </span>
+            </div>`;
+
+            // Check semantic_features
+            const semanticFeatures = result.semantic_features || [];
+            html += `<div class="field-row">
+                <span class="field-label">semantic_features array:</span>
+                <span class="field-value ${semanticFeatures.length > 0 ? 'success-text' : 'warning-text'}">
+                    ${semanticFeatures.length} items
+                </span>
+            </div>`;
+
+            // Check for noisy items
+            const noisyPatterns = ['Retry', 'Quick Action', 'Session Handler', 'Error Handler', 'Cache Manager', 'Utility Function'];
+            const noisyItems = semanticFeatures.filter(f => 
+                noisyPatterns.some(pattern => 
+                    (f.feature_name || '').includes(pattern) ||
+                    (f.feature_name || '').startsWith('PK\u0003\u0004')
+                )
+            );
+
+            if (noisyItems.length > 0) {
+                html += `<div class="status warning">
+                    ⚠️ Found ${noisyItems.length} potentially noisy items: ${noisyItems.map(f => f.feature_name).join(', ')}
+                </div>`;
+            } else {
+                html += `<div class="status success">
+                    ✓ No obvious noisy items detected
+                </div>`;
+            }
+
+            // Check for ZIP binary prefix
+            const zipBinaryItems = semanticFeatures.filter(f => 
+                (f.feature_name || '').startsWith('PK\u0003\u0004')
+            );
+            if (zipBinaryItems.length > 0) {
+                html += `<div class="status warning">
+                    ⚠️ Found ${zipBinaryItems.length} items with ZIP binary prefix (corrupted data)
+                </div>`;
+            }
+
+            // Check for documents field (should NOT be present)
+            let hasDocuments = false;
+            const checkForDocuments = (obj) => {
+                if (obj && typeof obj === 'object') {
+                    if (obj.documents) {
+                        hasDocuments = true;
+                        return;
+                    }
+                    for (let key in obj) {
+                        checkForDocuments(obj[key]);
+                    }
+                }
+            };
+            checkForDocuments(result);
+
+            if (hasDocuments) {
+                html += `<div class="status warning">
+                    ⚠️ Found 'documents' field in response (should have been sanitized!)
+                </div>`;
+            } else {
+                html += `<div class="status success">
+                    ✓ No 'documents' field found (sanitization working)
+                </div>`;
+            }
+
+            // Check timeline_analysis
+            const timelineAnalysis = result.timeline_analysis || [];
+            html += `<div class="field-row">
+                <span class="field-label">timeline_analysis array:</span>
+                <span class="field-value">
+                    ${timelineAnalysis.length} items
+                </span>
+            </div>`;
+
+            // Check insights
+            const insights = result.insights || [];
+            html += `<div class="field-row">
+                <span class="field-label">insights array:</span>
+                <span class="field-value">
+                    ${insights.length} items
+                </span>
+            </div>`;
+
+            // Check optional_intelligence
+            const optionalIntelligence = result.optional_intelligence || {};
+            html += `<div class="field-row">
+                <span class="field-label">optional_intelligence present:</span>
+                <span class="field-value">
+                    ${Object.keys(optionalIntelligence).length > 0 ? '✓ Yes' : '✗ No'}
+                </span>
+            </div>`;
+
+            analysisDiv.innerHTML = html;
+
+            // Update metadata table
+            updateMetadataTable(result);
+
+            // Update features table
+            updateFeaturesTable(semanticFeatures);
+        }
+
+        function updateActualStructure(data) {
+            const result = data.result || {};
+            let html = '';
+
+            html += `<div class="field-row">
+                <span class="field-label">Type:</span>
+                <span class="field-value">Object (result)</span>
+            </div>`;
+
+            html += `<div class="field-row">
+                <span class="field-label">Has audit_id:</span>
+                <span class="field-value ${result.audit_id ? 'success-text' : 'warning-text'}">
+                    ${result.audit_id ? '✓ Yes' : '✗ No'}
+                </span>
+            </div>`;
+
+            const semFeatures = result.semantic_features || [];
+            html += `<div class="field-row">
+                <span class="field-label">semantic_features items:</span>
+                <span class="field-value">
+                    ${semFeatures.length} items ${semFeatures.length > 0 ? '(Sample: ' + (semFeatures[0].feature_name || 'N/A') + ')' : ''}
+                </span>
+            </div>`;
+
+            let hasDocuments = false;
+            const checkForDocuments = (obj) => {
+                if (obj && typeof obj === 'object') {
+                    if (obj.documents) hasDocuments = true;
+                    for (let key in obj) checkForDocuments(obj[key]);
+                }
+            };
+            checkForDocuments(result);
+
+            html += `<div class="field-row">
+                <span class="field-label">Has documents field:</span>
+                <span class="field-value ${hasDocuments ? 'warning-text' : 'success-text'}">
+                    ${hasDocuments ? '✗ Yes (should be removed!)' : '✓ No'}
+                </span>
+            </div>`;
+
+            html += `<div class="field-row">
+                <span class="field-label">ZIP binary prefix:</span>
+                <span class="field-value ${semFeatures.some(f => (f.feature_name || '').startsWith('PK\u0003\u0004')) ? 'warning-text' : 'success-text'}">
+                    ${semFeatures.some(f => (f.feature_name || '').startsWith('PK\u0003\u0004')) ? '✗ Yes (corrupted!)' : '✓ No'}
+                </span>
+            </div>`;
+
+            document.getElementById('actual-structure').innerHTML = html;
+            document.getElementById('trace-status').textContent = result.audit_id ? `audit_id: ${result.audit_id}` : 'No audit_id found';
+        }
+
+        function updateMetadataTable(result) {
+            const tbody = document.getElementById('metadata-body');
+            const rows = [];
+
+            rows.push(['audit_id', result.audit_id || 'N/A', result.audit_id ? '✓' : '⚠️']);
+            rows.push(['created_at', result.created_at || 'N/A', result.created_at ? '✓' : '⚠️']);
+            rows.push(['github_owner', result.github_owner || 'N/A', result.github_owner ? '✓' : '⚠️']);
+            rows.push(['github_repo', result.github_repo || 'N/A', result.github_repo ? '✓' : '⚠️']);
+            rows.push(['health_score', result.health_score !== undefined ? result.health_score : 'N/A', '✓']);
+            rows.push(['semantic_confidence', result.semantic_confidence !== undefined ? result.semantic_confidence : 'N/A', '✓']);
+
+            tbody.innerHTML = rows.map(([field, value, status]) => 
+                `<tr>
+                    <td><strong>${field}</strong></td>
+                    <td>${value}</td>
+                    <td>${status}</td>
+                </tr>`
+            ).join('');
+        }
+
+        function updateFeaturesTable(semanticFeatures) {
+            const tbody = document.getElementById('features-body');
+            
+            if (semanticFeatures.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">No semantic features found</td></tr>';
+                return;
+            }
+
+            const rows = semanticFeatures.slice(0, 20).map((feature, idx) => {
+                const name = feature.feature_name || 'N/A';
+                const isNoisy = ['Retry', 'Quick Action', 'Session Handler'].some(p => name.includes(p)) || name.startsWith('PK\u0003\u0004');
+                const assessment = isNoisy ? '<span style="color: #dc3545;">⚠️ Noisy</span>' : '<span style="color: #28a745;">✓ Clean</span>';
+                
+                return `<tr>
+                    <td>${idx + 1}</td>
+                    <td>${name}</td>
+                    <td>${(feature.assigned_developers || []).join(', ') || 'N/A'}</td>
+                    <td>${feature.implementation_status || 'N/A'}</td>
+                    <td>${assessment}</td>
+                </tr>`;
+            }).join('');
+
+            tbody.innerHTML = rows;
+        }
+
+        function clearOutput() {
+            document.getElementById('status').className = 'status info';
+            document.getElementById('status').textContent = 'Output cleared. Ready to capture.';
+            document.getElementById('output').innerHTML = '';
+            document.getElementById('analysis').innerHTML = '';
+            document.getElementById('metadata-body').innerHTML = '<tr><td colspan="3" style="text-align: center; color: #999;">No data captured yet</td></tr>';
+            document.getElementById('features-body').innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">No data captured yet</td></tr>';
+            document.getElementById('actual-structure').innerHTML = '<div class="field-row" style="color: #999;"><span class="field-label">Run diagnostic to see actual structure...</span></div>';
+            capturedData = null;
+        }
+
+        function exportDiagnostics() {
+            if (!capturedData) {
+                alert('No data captured yet. Click "Capture" first.');
+                return;
+            }
+
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                browser_url: window.location.href,
+                api_base_url: API_BASE_URL,
+                captured_response: capturedData
+            };
+
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `scopesense-diagnostics-${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

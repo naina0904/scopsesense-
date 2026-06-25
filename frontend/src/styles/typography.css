@@ -1,0 +1,51 @@
+/* src/styles/typography.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+
+/* Base typographic scaling */
+html {
+  font-size: 16px; /* base size */
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+h1, .heading-1 {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  margin-bottom: var(--spacing-md);
+}
+
+h2, .heading-2 {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+h3, .heading-3 {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+
+h4, .heading-4 {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs);
+}
+
+p, .text-body {
+  font-size: var(--font-size-base);
+  margin-bottom: var(--spacing-sm);
+}
+
+small, .text-sm {
+  font-size: var(--font-size-sm);
+}
+
+/* Utility classes for weight */
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }

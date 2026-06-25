@@ -1,0 +1,41 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+.env
+
+# node
+node_modules/
+dist/
+build/
+.npm/
+
+# data
+data/
+data/chroma/
+data/hf_cache/
+
+# logs and temp
+logs/
+*.log
+scratch/
+tmp/
+*.txt
+*.json
+*.xlsx
+*.md
+!implementation_plan.md
+!README.md
+
+# ide
+.vscode/
+.idea/
+
+# macOS
+.DS_Store

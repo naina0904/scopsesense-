@@ -1,0 +1,35 @@
+import psycopg2, json
+
+conn = None
+try:
+    conn = psycopg2.connect("postgresql://postgres:12345@localhost:5433/scopesense")
+    cur = conn.cursor()
+    cur.execute("SELECT id, created_at, ai_summary FROM audits ORDER BY id DESC LIMIT 1")
+    row = cur.fetchone()
+    if not row:
+        print('NO_ROW')
+    else:
+        id, created_at, ai_summary = row
+        print('ID:', id)
+        print('CREATED_AT:', created_at)
+        if not ai_summary:
+            print('AI_SUMMARY_EMPTY')
+        else:
+            obj = json.loads(ai_summary)
+            sf = obj.get('semantic_features', [])
+            fo = obj.get('feature_ownership', [])
+            ta = obj.get('timeline_analysis', [])
+            # prepare display names
+            def name_of(f):
+                return f.get('feature_name') or f.get('name') or f.get('feature')
+            print('SEMANTIC_FEATURES_COUNT:', len(sf))
+            print('FIRST_20_SEMANTIC_FEATURES:', [name_of(f) for f in sf[:20]])
+            print('FEATURE_OWNERSHIP_COUNT:', len(fo))
+            print('TIMELINE_ANALYSIS_COUNT:', len(ta))
+    cur.close()
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+finally:
+    if conn:
+        conn.close()

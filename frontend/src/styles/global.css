@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius: 1rem;
+
+  /* Brand palette - soft premium pastels */
+  --background: oklch(0.985 0.003 95);          /* #F7F7F5 */
+  --foreground: oklch(0.27 0.02 265);           /* #1F2937 ink */
+  --ink: oklch(0.27 0.02 265);
+  --subtext: oklch(0.55 0.015 260);             /* #6B7280 */
+  --hairline: oklch(0.27 0.02 265 / 0.08);
+
+  --beige: oklch(0.945 0.018 75);               /* #F4EDE4 */
+  --rose: oklch(0.87 0.035 25);                 /* #E8CFCB */
+  --pista: oklch(0.9 0.04 150);                 /* #CFE4D3 */
+  --lavender: oklch(0.87 0.04 295);             /* #DCD7F8 */
+  --info: oklch(0.83 0.04 265);                 /* #BFC8E8 */
+  --success: oklch(0.79 0.07 150);              /* #9BC5A2 */
+  --warning: oklch(0.85 0.08 75);               /* #EBCFA7 */
+  --risk: oklch(0.76 0.08 25);                  /* #D9A6A6 */
+
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--ink);
+
+  --primary: oklch(0.27 0.02 265);              /* deep ink primary */
+  --primary-foreground: oklch(0.985 0.003 95);
+  --secondary: var(--beige);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.96 0.005 90);
+  --muted-foreground: var(--subtext);
+  --accent: var(--lavender);
+  --accent-foreground: var(--ink);
+  --destructive: var(--risk);
+  --destructive-foreground: oklch(0.27 0.02 265);
+
+  --border: oklch(0.27 0.02 265 / 0.08);
+  --input: oklch(0.27 0.02 265 / 0.12);
+  --ring: oklch(0.6 0.04 260);
+
+  --chart-1: var(--info);
+  --chart-2: var(--pista);
+  --chart-3: var(--lavender);
+  --chart-4: var(--warning);
+  --chart-5: var(--rose);
+
+  --sidebar: oklch(0.97 0.005 90);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: oklch(0.985 0.003 95);
+  --sidebar-accent: oklch(0.94 0.01 90);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--ring);
+
+  --shadow-soft: 0 1px 2px rgba(31,41,55,0.04), 0 8px 24px -12px rgba(31,41,55,0.08);
+  --shadow-lift: 0 4px 16px -4px rgba(31,41,55,0.06), 0 24px 48px -24px rgba(31,41,55,0.12);
+}
+
+.dark {
+  --background: oklch(0.18 0.01 265);
+  --foreground: oklch(0.97 0.005 90);
+}
+
+@layer base {
+  * { border-color: var(--border); }
+  html, body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, .font-display {
+    font-family: "Cormorant Garamond", "Cormorant", Georgia, serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Fix native select options being invisible (white-on-white) on Windows Chrome/Edge */
+select option {
+    background-color: #0f172a; /* slate-900 */
+    color: #f8fafc; /* slate-50 */
+}
+
+/* Utilities for Lovable styles */
+.soft-card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.lift-card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow-lift);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.grain {
+  position: relative;
+}
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(31,41,55,0.04) 1px, transparent 1px);
+  background-size: 3px 3px;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+}
