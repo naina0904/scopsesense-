@@ -86,6 +86,20 @@ class JiraClient:
             raise
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def get_projects(self) -> List[Dict[str, Any]]:
+        """Fetch all projects accessible by the user."""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/project",
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to fetch projects: {e}")
+            raise
+    
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _paginate_jira(self, url: str, params: Dict[str, Any], result_key: str, max_results: int = 50) -> List[Dict[str, Any]]:
         results = []
         start_at = 0

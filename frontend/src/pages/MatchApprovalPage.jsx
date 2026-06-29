@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Save, ArrowRight, Loader2, X, Check } from "lucide-react";
+import { CheckCircle, Save, ArrowRight, Loader2, X, Check, ArrowLeft } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 
 function MatchApprovalPage() {
-  const { auditSession, fetchActiveSession, getMatchesList, getActualFeatures, saveMatchesList, sessionLoading, error, setError } = useAudit();
+  const { auditSession, fetchActiveSession, getMatchesList, getActualFeatures, saveMatchesList, sessionLoading, error, setError, registerStepAction } = useAudit();
   const navigate = useNavigate();
 
   const [matches, setMatches] = useState([]);
@@ -92,6 +92,12 @@ function MatchApprovalPage() {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    registerStepAction({
+      onNext: matches.length > 0 ? handleSaveAndApprove : () => navigate("/execute")
+    });
+  });
 
   const handleApproveAll = () => {
     const updated = matches.map(m => {
@@ -243,15 +249,6 @@ function MatchApprovalPage() {
               )}
             </div>
 
-            <div className="flex justify-end mt-8">
-               <button
-                  onClick={handleSaveAndApprove}
-                  disabled={saving}
-                  className="h-12 px-6 rounded-full bg-ink text-background text-sm font-medium inline-flex items-center hover:opacity-90 transition disabled:opacity-50"
-               >
-                  {saving ? "Saving..." : "Save Checklist & Continue to Audit →"}
-               </button>
-            </div>
           </>
         )}
       </PageBody>

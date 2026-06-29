@@ -1,16 +1,23 @@
 import { useEffect, useState } from "react";
 import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Save, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Save, ArrowRight, Loader2, ArrowLeft } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 
 function NormalizationPage() {
-  const { auditSession, fetchActiveSession, getNormalizationData, saveNormalization, sessionLoading, error, setError } = useAudit();
+  const { auditSession, fetchActiveSession, getNormalizationData, saveNormalization, sessionLoading, error, setError, registerStepAction } = useAudit();
   const navigate = useNavigate();
 
   const [normData, setNormData] = useState([]);
   const [loadingNorm, setLoadingNorm] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    registerStepAction({
+      onPrev: () => navigate("/configuration"),
+      onNext: normData.length > 0 ? handleSaveAndApprove : () => navigate("/matches")
+    });
+  });
 
   useEffect(() => {
     fetchActiveSession().catch(() => {});
@@ -170,15 +177,6 @@ function NormalizationPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-4 p-6 border-t border-hairline bg-beige/30">
-              <button
-                onClick={() => navigate("/matches")}
-                className="h-12 px-6 rounded-full border border-hairline bg-card text-ink text-sm font-medium inline-flex items-center hover:bg-secondary transition gap-2"
-              >
-                <span>Proceed to Matches</span>
-                <ArrowRight size={16} />
-              </button>
-            </div>
           </div>
         )}
       </PageBody>

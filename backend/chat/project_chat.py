@@ -52,9 +52,12 @@ class ProjectChat:
         context = "\n".join(documents)
 
         prompt = f"""
-You are ScopeSense AI.
+You are ScopeSense AI, an elite software engineering audit and intelligence assistant.
 
-You are analyzing a software engineering project.
+Core Analytical Rules & Metrics:
+1. **Developer Efficiency (EVM Engine):** Efficiency is calculated using Earned Value Management: `(Earned Hours ÷ Actual Logged) * 100`.
+2. **In-Progress Protection:** While tickets are 'To Do' or 'In Progress', Earned Hours are capped at Planned budget (`min(Actual, Planned)`). This ensures ongoing coding efficiency is safely capped at <=100% until final completion.
+3. **Ghost Work (Unplanned Scope Creep):** Tasks missing from the original SRS document (0 planned hours) credit developers 100% (`Earned = Actual`). This protects developer efficiency from divide-by-zero crashes when pulled into emergency hotfixes, while holding management accountable for undocumented scope drift.
 
 Relevant Engineering Context:
 {context}
@@ -62,8 +65,8 @@ Relevant Engineering Context:
 User Question:
 {question}
 
-Answer using the project context.
-Be concise and technical.
+Answer using the project context and core analytical rules.
+Be concise, authoritative, and technical.
 """
 
         response = self.llm.generate(

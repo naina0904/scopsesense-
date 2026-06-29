@@ -1,17 +1,24 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAudit } from "../context/AuditContext";
-import { PlayCircle, Sparkles, Check, AlertTriangle, RefreshCw, XCircle } from "lucide-react";
+import { PlayCircle, Sparkles, Check, AlertTriangle, RefreshCw, XCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 
 function AuditPage() {
-  const { auditResult, loading, progress, error, setError, runDelayAnalysis, auditSession, fetchActiveSession } = useAudit();
+  const { auditResult, loading, progress, error, setError, runDelayAnalysis, auditSession, fetchActiveSession, registerStepAction } = useAudit();
   const navigate = useNavigate();
   const [provider, setProvider] = useState("groq");
 
   useEffect(() => {
     fetchActiveSession().catch(() => {});
   }, [fetchActiveSession]);
+
+  useEffect(() => {
+    registerStepAction({
+      onPrev: () => navigate("/matches"),
+      onNext: auditResult ? () => navigate("/results") : startAnalysis
+    });
+  });
 
   const approvalSteps = [
     { name: "Planned Requirements confirmed", approved: auditSession?.planned_data_approved, link: "/upload-srs" },
@@ -36,12 +43,6 @@ function AuditPage() {
     }
   };
 
-  useEffect(() => {
-    if (auditResult) {
-      navigate("/results");
-    }
-  }, [auditResult, navigate]);
-
   return (
     <>
       <PageHeader
@@ -51,6 +52,22 @@ function AuditPage() {
       />
       
       <PageBody>
+        {auditResult && (
+          <div className="bg-lavender/20 border border-lavender text-ink px-6 py-4 rounded-2xl text-sm font-medium flex items-center justify-between mb-8 shadow-sm">
+             <div className="flex items-center gap-3">
+                <Sparkles className="size-5 text-lavender" />
+                <span>An executive audit report already exists for this session.</span>
+             </div>
+             <button 
+               onClick={() => navigate("/results")}
+               className="px-4 py-2 rounded-full bg-ink text-background text-xs font-bold hover:opacity-90 transition inline-flex items-center gap-1.5"
+             >
+               <span>View Results</span>
+               <ArrowRight size={14} />
+             </button>
+          </div>
+        )}
+
         {error && (
           <div className="bg-rose/20 border border-rose text-ink px-4 py-3 rounded-xl text-sm font-medium flex items-center justify-between mb-6">
              <div className="flex items-center gap-2">
@@ -61,7 +78,7 @@ function AuditPage() {
           </div>
         )}
 
-        <div className="lift-card overflow-hidden">
+        <div className="lift-card overflow-hidden mb-8">
           <div className="grid lg:grid-cols-2">
             <div className="p-10 bg-beige/40">
               <h2 className="font-display text-3xl leading-tight">Ready to audit {auditSession?.project_key || "Project"}.</h2>

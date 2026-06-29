@@ -151,27 +151,41 @@ class WorkbookParser:
                                 except ValueError:
                                     hours_val = 0.0
                                     
-                        # Mathematical Summary Row Check
-                        # If a row's hours are >= 95% of all accumulated hours so far, it's a summary row (e.g. Design and Development)
-                        if total_accumulated_hours > 0 and hours_val >= total_accumulated_hours * 0.95:
-                            print(f"[WorkbookParser] Ignoring mathematical summary row: '{feature_val}' with {hours_val}h")
+                        norm_feat = feature_val.lower().strip()
+                        if norm_feat in ["design and development", "design and deployment", "total estimated hours", "total"]:
+                            print(f"[WorkbookParser] Ignoring summary header row: '{feature_val}'")
                             continue
                             
                         # Structural Global Phase Check
-                        # If the row has no SL (Serial Number) and no explicit module, it's likely a global phase (e.g. Client Testing)
                         has_sl = sl_col and pd.notna(row[sl_col]) and str(row[sl_col]).strip().lower() not in ["nan", "none", ""]
-                        if not has_explicit_module and not has_sl:
+                        if norm_feat in ["internal testing", "client testing", "deployment"] or (not has_explicit_module and not has_sl):
                             module_val = "Project Phases"
                         else:
                             module_val = current_module
                             
-                        total_accumulated_hours += hours_val
-                                    
+                        # Fallback for uncalculated formula values in known lifecycle phases
+                        if hours_val == 0.0 and total_accumulated_hours > 0:
+                            if "internal testing" in norm_feat:
+                                hours_val = round(total_accumulated_hours * 0.2, 1)
+                            elif "client testing" in norm_feat:
+                                hours_val = round(total_accumulated_hours * 0.1, 1)
+                            elif "deployment" in norm_feat:
+                                hours_val = round(total_accumulated_hours * 0.1, 1)
+                                
+                        if module_val != "Project Phases":
+                            total_accumulated_hours += hours_val
+                            
                         # Handle separate Resource Column if embedded failed
                         if resource_val == "Unassigned" and resource_col and pd.notna(row[resource_col]):
                             raw_resource = str(row[resource_col]).strip()
                             if raw_resource.lower() not in ["nan", "none", ""]:
                                 resource_val = ResourceMappingService.map_resource(raw_resource)
+                                
+                        if resource_val == "Unassigned":
+                            if "internal testing" in norm_feat:
+                                resource_val = "S2 (Mid-Level Developer)"
+                            elif "client testing" in norm_feat or "deployment" in norm_feat:
+                                resource_val = "S3 (Senior Developer)"
                                 
                         feature_id = f"FT-XLS-{len(features) + 1}"
                         

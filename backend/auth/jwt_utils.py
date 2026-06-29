@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import os
 
 # Secret key – load from environment variable JWT_SECRET
-SECRET_KEY = os.environ["JWT_SECRET"]
+SECRET_KEY = os.environ.get("JWT_SECRET", "scopesense-default-secret-key-2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import DelayAnalysisResults from "../components/DelayAnalysisResults";
 import AIChatPanel from "../components/AIChatPanel";
 import ModelSelector from "./ModelSelector";
 import { useAudit } from "../context/AuditContext";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
-import { Download, Share2, Loader2, HelpCircle, Sparkles } from "lucide-react";
+import { Loader2, HelpCircle, Sparkles, ArrowLeft, RotateCcw } from "lucide-react";
 
 function ResultsDashboard() {
+  const navigate = useNavigate();
   const [provider, setProvider] = useState("groq");
-  const { auditResult, auditSession, loading, error, fetchAuditResult } = useAudit();
+  const { auditResult, auditSession, loading, error, fetchAuditResult, registerStepAction } = useAudit();
   
   const faqs = auditResult?.faqs || auditResult?.faq_table?.items || [];
 
@@ -18,29 +20,31 @@ function ResultsDashboard() {
     }
   }, [auditResult, auditSession, fetchAuditResult]);
 
+  useEffect(() => {
+    registerStepAction({
+      onPrev: () => navigate("/execute")
+    });
+  });
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <Loader2 className="size-8 text-ink animate-spin" />
-        <div className="text-xl font-display text-ink">Loading audit results...</div>
+        <Loader2 className="size-8 animate-spin text-ink" />
+        <p className="text-sm font-mono text-subtext">Loading audit intelligence report...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !auditResult) {
     return (
-      <div className="p-8">
-         <div className="bg-rose/20 border border-rose text-ink px-4 py-3 rounded-xl text-sm font-medium">
-            Error: {error}
-         </div>
-      </div>
-    );
-  }
-
-  if (!auditResult) {
-    return (
-      <div className="p-8 text-center text-subtext">
-         No audit result available. Run an audit first.
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <p className="text-risk font-semibold">{error || "No audit results available."}</p>
+        <button 
+          onClick={() => navigate("/execute")} 
+          className="px-4 py-2 bg-ink text-background rounded-lg text-xs font-semibold hover:opacity-90 transition"
+        >
+          Back to Execution
+        </button>
       </div>
     );
   }
@@ -51,19 +55,6 @@ function ResultsDashboard() {
         eyebrow={`Audit complete · ${auditResult.project_key || "Project"}`}
         title="Executive Audit Report"
         lede="A board-ready story of what was planned, what was delivered, and why the project drifted."
-        primary={{ 
-          label: "Export PDF", 
-          icon: Download,
-          onClick: () => window.print()
-        }}
-        secondary={{ 
-          label: "Share link", 
-          icon: Share2,
-          onClick: () => {
-            navigator.clipboard.writeText(window.location.href);
-            alert("Link copied to clipboard!");
-          }
-        }}
       />
       
       <PageBody>
@@ -103,6 +94,32 @@ function ResultsDashboard() {
                projectKey={auditResult?.project_key}
                platform={auditResult?.platform}
              />
+          </div>
+
+          {/* Workflow Navigation Footer */}
+          <div className="flex flex-col sm:flex-row justify-between items-center p-6 border border-hairline rounded-3xl bg-card/60 backdrop-blur-sm mt-12 gap-4">
+             <button
+               onClick={() => navigate("/execute")}
+               className="h-12 px-6 rounded-full border border-hairline bg-secondary text-ink text-sm font-medium inline-flex items-center hover:bg-secondary/80 transition gap-2 w-full sm:w-auto justify-center"
+             >
+               <ArrowLeft size={16} />
+               <span>Back to Execute Audit</span>
+             </button>
+
+             <button
+               onClick={() => navigate("/matches")}
+               className="h-12 px-6 rounded-full border border-hairline bg-card text-subtext text-sm font-medium inline-flex items-center hover:text-ink hover:bg-secondary/50 transition gap-2 w-full sm:w-auto justify-center"
+             >
+               <RotateCcw size={15} />
+               <span>Re-review Semantic Matches</span>
+             </button>
+
+             <button
+               onClick={() => navigate("/upload-srs")}
+               className="h-12 px-6 rounded-full bg-ink text-background text-sm font-medium inline-flex items-center hover:opacity-90 transition gap-2 shadow-sm w-full sm:w-auto justify-center"
+             >
+               <span>Start New Project Audit</span>
+             </button>
           </div>
         </div>
       </PageBody>

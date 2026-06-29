@@ -2,19 +2,21 @@ import { useEffect, useState } from "react";
 import { useSRS } from "../context/SRSContext";
 import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
-import { UploadCloud, CheckCircle, Save, Plus, Trash2, ArrowUpRight, Sparkles, ShieldCheck, FileText } from "lucide-react";
+import { UploadCloud, CheckCircle, Save, Plus, Trash2, ArrowUpRight, Sparkles, ShieldCheck, FileText, ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 import { ScopeBadge } from "../components/ui/ScopeBadge";
 
 function SRSUploadPage() {
   const { setSRSFile, setExtractionConfirmed } = useSRS();
-  const { auditSession, fetchActiveSession, uploadSRSFile, getPlannedFeatures, savePlannedData, sessionLoading, error, setError } = useAudit();
+  const { auditSession, fetchActiveSession, uploadSRSFile, getPlannedFeatures, savePlannedData, sessionLoading, error, setError, registerStepAction } = useAudit();
   const navigate = useNavigate();
 
   const [features, setFeatures] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [openContainer1, setOpenContainer1] = useState(true);
+  const [openContainer2, setOpenContainer2] = useState(true);
 
   useEffect(() => {
     fetchActiveSession().catch(() => {});
@@ -59,14 +61,36 @@ function SRSUploadPage() {
     setFeatures(updated);
   };
 
-  const addRow = () => {
+  const isPhaseRow = (reqName, modName) => {
+    const norm = (reqName || "").toLowerCase().trim();
+    return modName === "Project Phases" || ["internal testing", "client testing", "deployment"].includes(norm);
+  };
+  const isSummaryHeader = (reqName) => {
+    const norm = (reqName || "").toLowerCase().trim();
+    return ["design and development", "design and deployment", "total estimated hours", "total"].includes(norm);
+  };
+
+  const addFeatureRow = () => {
     setFeatures([
       ...features,
       {
         module: "General",
-        requirement: `New Requirement ${features.length + 1}`,
+        requirement: `New Feature ${features.length + 1}`,
         planned_hours: 0.0,
-        assigned_developer: "Unassigned",
+        assigned_developer: "S2 (Mid-Level Developer)",
+        priority: "Medium"
+      }
+    ]);
+  };
+
+  const addPhaseRow = () => {
+    setFeatures([
+      ...features,
+      {
+        module: "Project Phases",
+        requirement: `New Phase`,
+        planned_hours: 0.0,
+        assigned_developer: "S3 (Senior Developer)",
         priority: "Medium"
       }
     ]);
@@ -92,6 +116,18 @@ function SRSUploadPage() {
     }
   };
 
+  useEffect(() => {
+    registerStepAction({
+      onNext: async () => {
+        if (features.length > 0) {
+          await handleSaveAndApprove();
+        } else {
+          navigate("/configuration");
+        }
+      }
+    });
+  });
+
   return (
     <>
       <PageHeader
@@ -103,13 +139,13 @@ function SRSUploadPage() {
       <PageBody>
         {error && (
           <div className="bg-rose/20 border border-rose text-ink px-4 py-3 rounded-xl text-sm font-medium flex items-center justify-between">
-             <span>{error}</span>
-             <button onClick={() => setError(null)} className="opacity-50 hover:opacity-100">&times;</button>
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="opacity-50 hover:opacity-100">&times;</button>
           </div>
         )}
-        
+
         {auditSession?.planned_data_approved && (
-          <div className="flex items-center gap-2 bg-pista/30 border border-pista text-ink px-4 py-3 rounded-xl text-sm font-semibold">
+          <div className="flex items-center gap-2 bg-pista/30 border border-pista text-ink px-4 py-3 rounded-xl text-sm font-semibold mb-6">
             <CheckCircle size={18} />
             <span>Planned Data Approved</span>
           </div>
@@ -135,7 +171,7 @@ function SRSUploadPage() {
                   />
                 </label>
               </div>
-              {fileName && <p className="mt-4 text-ink text-sm font-medium">Selected: <span className="opacity-70">{fileName}</span></p>}
+              {fileName && <p className="mt-4 text-xs font-mono text-subtext">Uploaded: {fileName}</p>}
             </div>
           </div>
 
@@ -153,106 +189,199 @@ function SRSUploadPage() {
           </div>
         </div>
 
-        {features.length > 0 && (
-          <div className="mt-10">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="font-display text-2xl">Table 1: Planned Requirements Review</h3>
-                <p className="text-subtext text-sm">Confirm each requirement parsed from your SRS.</p>
-              </div>
-              <button
-                onClick={addRow}
-                className="h-10 px-4 rounded-full border border-hairline bg-card text-sm hover:bg-secondary transition flex items-center gap-2"
-              >
-                <Plus size={16} /> Add Feature
-              </button>
-            </div>
+        {features.length > 0 && (() => {
+          const table1Items = features
+            .map((item, masterIndex) => ({ ...item, masterIndex }))
+            .filter(item => !isPhaseRow(item.requirement, item.module) && !isSummaryHeader(item.requirement));
 
-            <div className="soft-card overflow-hidden">
-                <div className="grid grid-cols-12 px-6 py-3 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
-                  <div className="col-span-2">Module / Epic</div>
-                  <div className="col-span-4">Requirement</div>
-                  <div className="col-span-2">Owner</div>
-                  <div className="col-span-2">Priority</div>
-                  <div className="col-span-1">Hours</div>
-                  <div className="col-span-1 text-right">Actions</div>
-                </div>
-                
-                <div className="divide-y divide-hairline">
-                  {features.map((item, index) => (
-                    <div key={index} className="grid grid-cols-12 px-6 py-3 items-center hover:bg-secondary/50 transition gap-2">
-                      <div className="col-span-2">
-                         <input
-                          type="text"
-                          value={item.module || ""}
-                          onChange={(e) => handleFieldChange(index, "module", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1 text-sm text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div className="col-span-4">
-                        <input
-                          type="text"
-                          value={item.requirement || ""}
-                          onChange={(e) => handleFieldChange(index, "requirement", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1 text-sm font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                         <input
-                          type="text"
-                          value={item.assigned_developer || ""}
-                          onChange={(e) => handleFieldChange(index, "assigned_developer", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1 text-sm text-subtext w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                         <select
-                          value={item.priority || "Medium"}
-                          onChange={(e) => handleFieldChange(index, "priority", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1 text-sm text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                          <option value="Critical">Critical</option>
-                        </select>
-                      </div>
-                      <div className="col-span-1">
-                         <input
-                          type="number"
-                          step="0.5"
-                          value={item.planned_hours || 0}
-                          onChange={(e) => handleFieldChange(index, "planned_hours", parseFloat(e.target.value) || 0)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1 text-sm text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div className="col-span-1 flex justify-end">
-                        <button
-                          onClick={() => deleteRow(index)}
-                          className="text-risk hover:text-red-700 p-1.5 rounded-lg hover:bg-rose/30 transition"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+          const table2Items = features
+            .map((item, masterIndex) => ({ ...item, masterIndex }))
+            .filter(item => isPhaseRow(item.requirement, item.module));
+
+          const table1TotalHours = table1Items.reduce((acc, curr) => acc + (parseFloat(curr.planned_hours) || 0), 0);
+          const table2TotalHours = table2Items.reduce((acc, curr) => acc + (parseFloat(curr.planned_hours) || 0), 0);
+
+          return (
+            <div className="mt-10 space-y-8">
+              {/* Container 1: Design and Deployment */}
+              <div className="soft-card overflow-hidden border border-hairline bg-card shadow-sm">
+                <div 
+                  onClick={() => setOpenContainer1(!openContainer1)}
+                  className="flex justify-between items-center px-6 py-4 bg-lavender/25 cursor-pointer select-none border-b border-hairline hover:bg-lavender/35 transition border-l-4 border-l-primary"
+                >
+                  <div className="flex items-center gap-3">
+                    {openContainer1 ? <ChevronDown size={20} className="text-primary" /> : <ChevronRight size={20} className="text-primary" />}
+                    <div>
+                      <h3 className="font-display text-xl font-bold text-ink">Table 1: Design and Deployment</h3>
+                      <p className="text-subtext text-xs mt-0.5">Core software feature requirements parsed from SRS ({table1Items.length} Features)</p>
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono font-semibold">
+                      TOTAL ESTIMATED HOURS: {table1TotalHours.toFixed(1)} hrs
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); addFeatureRow(); setOpenContainer1(true); }}
+                      className="h-8 px-3 rounded-full border border-hairline bg-card text-xs font-medium hover:bg-secondary transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Plus size={14} /> Add Feature
+                    </button>
+                  </div>
                 </div>
-                <div className="px-6 py-3 text-xs text-subtext bg-beige/30 border-t border-hairline">
-                  Showing {features.length} requirements
+
+                {openContainer1 && (
+                  <div>
+                    <div className="grid grid-cols-12 px-6 py-2.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
+                      <div className="col-span-2">Module / Epic</div>
+                      <div className="col-span-4">Requirement</div>
+                      <div className="col-span-2">Owner</div>
+                      <div className="col-span-2">Priority</div>
+                      <div className="col-span-1 text-center">Hours</div>
+                      <div className="col-span-1 text-right">Actions</div>
+                    </div>
+                    
+                    <div className="divide-y divide-hairline max-h-[450px] overflow-y-auto">
+                      {table1Items.map((feature) => (
+                        <div key={feature.masterIndex} className="grid grid-cols-12 px-6 py-2.5 items-center hover:bg-secondary/40 transition gap-4">
+                          <div className="col-span-2">
+                            <input
+                              type="text"
+                              value={feature.module || ""}
+                              onChange={(e) => handleFieldChange(feature.masterIndex, "module", e.target.value)}
+                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <input
+                              type="text"
+                              value={feature.requirement || ""}
+                              onChange={(e) => handleFieldChange(feature.masterIndex, "requirement", e.target.value)}
+                              className="bg-card border border-hairline rounded px-2 py-1 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <input
+                              type="text"
+                              value={feature.assigned_developer || ""}
+                              onChange={(e) => handleFieldChange(feature.masterIndex, "assigned_developer", e.target.value)}
+                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <select
+                              value={feature.priority || "Medium"}
+                              onChange={(e) => handleFieldChange(feature.masterIndex, "priority", e.target.value)}
+                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                            >
+                              <option value="High">High</option>
+                              <option value="Medium">Medium</option>
+                              <option value="Low">Low</option>
+                            </select>
+                          </div>
+                          <div className="col-span-1">
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={feature.planned_hours || 0}
+                              onChange={(e) => handleFieldChange(feature.masterIndex, "planned_hours", parseFloat(e.target.value) || 0)}
+                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary text-center font-mono"
+                            />
+                          </div>
+                          <div className="col-span-1 text-right">
+                            <button
+                              onClick={() => deleteRow(feature.masterIndex)}
+                              className="text-risk hover:text-red-700 p-1 rounded hover:bg-rose/30 transition"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Container 2: Project Phases */}
+              <div className="soft-card overflow-hidden border border-hairline bg-card shadow-sm">
+                <div 
+                  onClick={() => setOpenContainer2(!openContainer2)}
+                  className="flex justify-between items-center px-6 py-4 bg-lavender/25 cursor-pointer select-none border-b border-hairline hover:bg-lavender/35 transition border-l-4 border-l-primary"
+                >
+                  <div className="flex items-center gap-3">
+                    {openContainer2 ? <ChevronDown size={20} className="text-primary" /> : <ChevronRight size={20} className="text-primary" />}
+                    <div>
+                      <h3 className="font-display text-xl font-bold text-ink">Table 2: Project Phases</h3>
+                      <p className="text-subtext text-xs mt-0.5">Internal testing, client testing, and deployment schedule ({table2Items.length} Phases)</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-semibold">
+                      TOTAL HOURS: {table2TotalHours.toFixed(1)} hrs
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); addPhaseRow(); setOpenContainer2(true); }}
+                      className="h-8 px-3 rounded-full border border-hairline bg-card text-xs font-medium hover:bg-secondary transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Plus size={14} /> Add Phase
+                    </button>
+                  </div>
                 </div>
+
+                {openContainer2 && (
+                  <div>
+                    <div className="grid grid-cols-12 px-6 py-2.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
+                      <div className="col-span-5">Requirement (Phase Name)</div>
+                      <div className="col-span-4">Owner (Assigned Developer)</div>
+                      <div className="col-span-2 text-center">Estimated Hours</div>
+                      <div className="col-span-1 text-right">Actions</div>
+                    </div>
+                    
+                    <div className="divide-y divide-hairline">
+                      {table2Items.map((phase) => (
+                        <div key={phase.masterIndex} className="grid grid-cols-12 px-6 py-3 items-center hover:bg-secondary/40 transition gap-4">
+                          <div className="col-span-5">
+                            <input
+                              type="text"
+                              value={phase.requirement || ""}
+                              onChange={(e) => handleFieldChange(phase.masterIndex, "requirement", e.target.value)}
+                              className="bg-card border border-hairline rounded px-3 py-1.5 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <input
+                              type="text"
+                              value={phase.assigned_developer || ""}
+                              onChange={(e) => handleFieldChange(phase.masterIndex, "assigned_developer", e.target.value)}
+                              className="bg-card border border-hairline rounded px-3 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={phase.planned_hours || 0}
+                              onChange={(e) => handleFieldChange(phase.masterIndex, "planned_hours", parseFloat(e.target.value) || 0)}
+                              className="bg-card border border-hairline rounded px-3 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary text-center font-mono font-semibold"
+                            />
+                          </div>
+                          <div className="col-span-1 text-right">
+                            <button
+                              onClick={() => deleteRow(phase.masterIndex)}
+                              className="text-risk hover:text-red-700 p-1.5 rounded hover:bg-rose/30 transition"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            
-            <div className="flex justify-end mt-6">
-              <button
-                  onClick={handleSaveAndApprove}
-                  disabled={saving}
-                  className="h-12 px-6 rounded-full bg-ink text-background text-sm font-medium inline-flex items-center hover:opacity-90 transition disabled:opacity-50"
-              >
-                  {saving ? "Saving..." : "Confirm & continue to platform setup →"}
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </PageBody>
     </>
   );

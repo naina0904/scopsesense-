@@ -25,8 +25,8 @@ RUN mkdir -p /app/data /app/data/hf_cache /app/backend/memory/storage
 # model and audits start instantly without network downloads.
 ENV SENTENCE_TRANSFORMERS_HOME=/app/data/hf_cache
 ENV HF_HOME=/app/data/hf_cache
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/app/data/hf_cache')" \
-    || echo "[WARN] Model pre-download failed — will download on first use."
+RUN timeout 30s python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/app/data/hf_cache')" \
+    || echo "[WARN] Model pre-download timed out/failed — will download on first use."
 
 # Expose backend port
 EXPOSE 8000

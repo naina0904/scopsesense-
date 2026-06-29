@@ -122,9 +122,9 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
         db.commit()
         
         try:
-            # Get normalized data
-            normalized_data = session.normalized_data_json or []
-            features = normalized_data.get("features", []) if isinstance(normalized_data, dict) else normalized_data
+            # Get fresh normalized data dynamically
+            from backend.api.confirmation_routes import merge_normalized_data
+            features = merge_normalized_data(db, session)
             variance_table = []
             developer_stats = {}
             total_planned = 0
@@ -180,27 +180,52 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                 requirement_map[req_name]["devs"].add(dev)
                 
                 if dev not in developer_stats:
-                    developer_stats[dev] = {"planned": 0, "actual": 0, "modules": set()}
+                    developer_stats[dev] = {"planned": 0, "actual": 0, "earned": 0, "modules": set()}
                 
                 developer_stats[dev]["actual"] += total_actual
                 # We do not strictly add `planned` to dev stats here to avoid complex split-budget math, 
                 # but we'll add the requirement's full planned budget to the primary developer
                 developer_stats[dev]["modules"].add(module)
                 
-            # Distribute planned hours to developers (simplified: primary owner gets the budget)
+            # Distribute planned hours and earned value to developers
+            srs_schedule_variance = 0.0
+            ghost_hours = 0.0
+
             for req_name, data in requirement_map.items():
+                is_unplanned = req_name.startswith("Unknown") or data["planned_hours"] == 0
+                is_completed = data["status"].lower() in ["done", "resolved", "closed", "completed", "fixed"]
+                
+                if is_unplanned:
+                    # Scenario F: Ghost Work credit (Earned = Actual)
+                    earned_hours = data["actual_hours"]
+                elif is_completed:
+                    # Scenario B: Completed (Earned = Planned)
+                    earned_hours = data["planned_hours"]
+                else:
+                    # Scenario A: In Progress (Earned = min(Actual, Planned))
+                    earned_hours = min(data["actual_hours"], data["planned_hours"])
+
                 if data["devs"]:
                     primary_dev = list(data["devs"])[0]
                     developer_stats[primary_dev]["planned"] += data["planned_hours"]
+                    developer_stats[primary_dev]["earned"] += earned_hours
                 
                 total_planned += data["planned_hours"]
                 total_actual += data["actual_hours"]
                 variance = data["actual_hours"] - data["planned_hours"]
                 total_variance += variance
+
+                if is_unplanned:
+                    ghost_hours += data["actual_hours"]
+                else:
+                    srs_schedule_variance += variance
                 
                 # Format Audit Explainability
                 issues_str = ", ".join(data["issues"]) if data["issues"] else "No Jira Tickets"
-                calculation_formula = f"{data['actual_hours']}h (Actual) - {data['planned_hours']}h (Planned) = {variance}h (Variance)"
+                if is_unplanned and data["actual_hours"] > 0:
+                    calculation_formula = f"{data['actual_hours']}h extra hours were logged due to task '{issues_str}', which was not in the planned SRS document."
+                else:
+                    calculation_formula = f"{data['actual_hours']}h (Actual) - {data['planned_hours']}h (Planned) = {variance}h (Variance)"
                 evidence_str = f"Source: Jira ({issues_str}) | Formula: {calculation_formula}"
                 
                 variance_table.append({
@@ -220,14 +245,14 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
             developer_table = []
             for dev, stats in developer_stats.items():
                 dev_var = stats["actual"] - stats["planned"]
-                eff = (stats["planned"] / stats["actual"] * 100) if stats["actual"] > 0 else 0
+                eff = (stats["earned"] / stats["actual"] * 100) if stats["actual"] > 0 else 0
                 developer_table.append({
                     "developer": dev,
                     "assigned_modules": list(stats["modules"]),
                     "planned_hours": stats["planned"],
                     "actual_hours": stats["actual"],
                     "variance": dev_var,
-                    "efficiency": eff
+                    "efficiency": round(eff, 2)
                 })
                 
             # A. Semantic Confidence
@@ -397,6 +422,8 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                 "root_cause_table": root_cause_table,
                 "health_score": health_score,
                 "schedule_variance": total_variance,
+                "srs_schedule_variance": round(srs_schedule_variance, 1),
+                "ghost_hours": round(ghost_hours, 1),
                 "remaining_effort": remaining_effort,
                 "requirement_drift": sum(1 for f in features if float(f.get("actual_hours") or 0) > 0 and float(f.get("planned_hours") or 0) == 0),
                 "unassigned_features": unassigned_count,

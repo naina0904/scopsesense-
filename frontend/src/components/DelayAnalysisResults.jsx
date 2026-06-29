@@ -92,8 +92,9 @@ function DelayAnalysisResults({ results }) {
                 : "recently"}
            </em>.
          </h2>
-         <div className="mt-10 grid sm:grid-cols-3 gap-4">
-           <Headline tone="bg-info/40" label="Schedule Variance" value={`${results.schedule_variance ?? 0}h`} sub="vs. planned hours" />
+         <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+           <Headline tone="bg-info/40" label="SRS Roadmap Variance" value={`${results.srs_schedule_variance ?? results.schedule_variance ?? 0}h`} sub="Pure baseline slip" />
+           <Headline tone="bg-rose/20" label="Ghost Scope Creep" value={`${results.ghost_hours > 0 ? '+' : ''}${results.ghost_hours ?? 0}h`} sub="Unbudgeted drift" />
            <Headline tone="bg-emerald/30" label="Remaining Work" value={`${results.remaining_effort ?? 0}h`} sub="Open tasks" />
            <Headline tone="bg-beige" label="Predicted Delay" value={`${results.predicted_delay ?? 0}w`} sub="Forecasted slip" />
          </div>

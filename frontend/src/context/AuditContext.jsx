@@ -38,6 +38,11 @@ export const AuditProvider = ({ children }) => {
   const [sessionId, setSessionId] = useState(null);
 
   const pollRef = useRef(null);
+  const stepActionRef = useRef({ onNext: null, onPrev: null });
+
+  const registerStepAction = useCallback((actions) => {
+    stepActionRef.current = { onNext: actions?.onNext || null, onPrev: actions?.onPrev || null };
+  }, []);
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -393,6 +398,8 @@ export const AuditProvider = ({ children }) => {
     fetchAuditResult,
     taskId,
     sessionId,
+    stepActionRef,
+    registerStepAction,
   };
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

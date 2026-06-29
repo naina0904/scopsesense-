@@ -53,6 +53,7 @@ class PlatformCredentials(BaseModel):
     repo: Optional[str] = None
     github_pat: Optional[str] = None
     project_key: Optional[str] = None
+    project_name: Optional[str] = None
     jira_domain: Optional[str] = None
     jira_api_token: Optional[str] = None
     jira_email: Optional[str] = None
@@ -229,27 +230,34 @@ def merge_normalized_data(db: Session, session_obj: AuditSession) -> List[Dict[s
     
     matches = db.query(ModuleMatchORM).filter(
         ModuleMatchORM.audit_session_id == session_obj.id,
-        ModuleMatchORM.approval_status == 'APPROVED'
+        ModuleMatchORM.approval_status != 'REJECTED'
     ).all()
     
-    # 1. Subtask Rollup Phase
-    subtask_hours = {}
-    subtasks_to_remove = set()
-    for act in actual_features:
-        if act.get("rollup_parent_id"):
-            parent_id = act.get("rollup_parent_id")
-            subtask_hours[parent_id] = subtask_hours.get(parent_id, 0.0) + float(act.get("actual_hours") or 0.0)
-            subtasks_to_remove.add(act.get("issue_key"))
-            
-    # 2. Map 1-to-Many
-    plan_to_act_list = {}
-    act_to_plan = {}
+    # 1. Map 1-to-1 best matches first
+    # If a feature_id matched multiple SRS requirements, only keep the match with highest confidence score
+    best_matches = {}
     for m in matches:
         if m.feature_id >= 0:
-            if m.srs_node_id not in plan_to_act_list:
-                plan_to_act_list[m.srs_node_id] = []
-            plan_to_act_list[m.srs_node_id].append(m.feature_id)
-            act_to_plan[m.feature_id] = m.srs_node_id
+            if m.feature_id not in best_matches or (m.confidence_score or 0.0) > (best_matches[m.feature_id].confidence_score or 0.0):
+                best_matches[m.feature_id] = m
+
+    plan_to_act_list = {}
+    act_to_plan = {}
+    for m in best_matches.values():
+        if m.srs_node_id not in plan_to_act_list:
+            plan_to_act_list[m.srs_node_id] = []
+        plan_to_act_list[m.srs_node_id].append(m.feature_id)
+        act_to_plan[m.feature_id] = m.srs_node_id
+
+    # 2. Subtask Rollup Phase (only roll up unmapped child tasks!)
+    subtask_hours = {}
+    subtasks_to_remove = set()
+    for act_idx, act in enumerate(actual_features):
+        if act.get("rollup_parent_id"):
+            if act_idx not in act_to_plan:
+                parent_id = act.get("rollup_parent_id")
+                subtask_hours[parent_id] = subtask_hours.get(parent_id, 0.0) + float(act.get("actual_hours") or 0.0)
+                subtasks_to_remove.add(act.get("issue_key"))
             
     # 2.5 Build Implicit Identity Map
     implicit_identity_map = dict(session_obj.identity_resolution_json or {})
@@ -429,24 +437,115 @@ def save_planned_features(request: SavePlannedRequest, db: Session = Depends(get
     return {"status": "saved", "planned_data_approved": True}
 
 @router.get("/integrations/connections")
-def get_connections(db: Session = Depends(get_db), user = Depends(has_role(Role.MANAGER))):
-    connections = db.query(PlatformConnection).all()
-    # Mask credentials for security
-    result = []
-    for c in connections:
-        safe_creds = dict(c.credentials_json)
-        for key in ["github_pat", "jira_api_token"]:
-            if safe_creds.get(key):
-                safe_creds[key] = "********"
-        result.append({
+def get_connections(db: Session = Depends(get_db)):
+    """Get saved platform credentials (without secrets)."""
+    conns = db.query(PlatformConnection).all()
+    results = []
+    for c in conns:
+        safe_creds = c.credentials_json.copy()
+        # mask sensitive tokens
+        if "github_pat" in safe_creds and safe_creds["github_pat"]:
+            safe_creds["github_pat"] = "********"
+        if "jira_api_token" in safe_creds and safe_creds["jira_api_token"]:
+            safe_creds["jira_api_token"] = "********"
+            
+        results.append({
             "id": c.id,
             "platform": c.platform,
             "credentials": safe_creds
         })
-    return {"connections": result}
+    return {"connections": results}
+
+@router.get("/integrations/jira/projects/{conn_id}")
+def fetch_jira_projects(conn_id: int, db: Session = Depends(get_db)):
+    """Fetch Jira projects using stored credentials."""
+    conn = db.query(PlatformConnection).filter(PlatformConnection.id == conn_id).first()
+    if not conn or conn.platform.lower() != "jira":
+        raise HTTPException(status_code=404, detail="Jira connection not found")
+        
+    creds = conn.credentials_json
+    domain = creds.get("jira_domain")
+    api_token = creds.get("jira_api_token")
+    email = creds.get("jira_email")
+    username = creds.get("jira_username")
+    
+    if not domain or not api_token:
+        raise HTTPException(status_code=400, detail="Incomplete Jira credentials")
+        
+    from backend.integrations.jira.jira_client import JiraClient
+    try:
+        client = JiraClient(domain=domain, api_token=api_token, email=email, username=username)
+        projects = client.get_projects()
+        
+        return {"projects": [{"key": p.get("key"), "name": p.get("name")} for p in projects]}
+    except Exception as e:
+        logger.error(f"Failed to fetch Jira projects: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch Jira projects: {e}")
+
+@router.get("/integrations/github/repos/{conn_id}")
+def fetch_github_repos(conn_id: int, db: Session = Depends(get_db)):
+    """Fetch GitHub repositories using stored PAT."""
+    conn = db.query(PlatformConnection).filter(PlatformConnection.id == conn_id).first()
+    if not conn or conn.platform.lower() != "github":
+        raise HTTPException(status_code=404, detail="GitHub connection not found")
+        
+    creds = conn.credentials_json
+    token = creds.get("github_pat")
+    
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing GitHub token")
+        
+    import requests
+    try:
+        response = requests.get(
+            "https://api.github.com/user/repos",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"},
+            params={"per_page": 100, "sort": "updated"}
+        )
+        response.raise_for_status()
+        repos = response.json()
+        
+        return {"repos": [{"full_name": r.get("full_name"), "name": r.get("name")} for r in repos]}
+    except Exception as e:
+        logger.error(f"Failed to fetch GitHub repos: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch GitHub repositories: {e}")
+
+@router.post("/integrations/connections/clone")
+def clone_connection(payload: dict, db: Session = Depends(get_db)):
+    """Clone an existing connection and change the project target."""
+    base_id = payload.get("smart_base_id")
+    platform = payload.get("platform")
+    
+    base_conn = db.query(PlatformConnection).filter(PlatformConnection.id == base_id).first()
+    if not base_conn:
+        raise HTTPException(status_code=404, detail="Base connection not found")
+        
+    new_creds = base_conn.credentials_json.copy()
+    
+    if platform == "jira":
+        new_creds["project_key"] = payload.get("project_key")
+        new_creds["project_name"] = payload.get("project_name")
+    elif platform == "github":
+        new_creds["owner"] = payload.get("owner")
+        new_creds["repo"] = payload.get("repo")
+        new_creds["project_name"] = payload.get("project_name")
+        
+    # Check duplicate
+    existing = db.query(PlatformConnection).filter(PlatformConnection.platform == platform).all()
+    for e in existing:
+        if platform == "jira" and e.credentials_json.get("jira_domain") == new_creds.get("jira_domain") and e.credentials_json.get("project_key") == new_creds.get("project_key"):
+            return {"status": "success", "message": "Connection already exists"}
+        if platform == "github" and e.credentials_json.get("owner") == new_creds.get("owner") and e.credentials_json.get("repo") == new_creds.get("repo"):
+            return {"status": "success", "message": "Connection already exists"}
+            
+    conn = PlatformConnection(platform=platform)
+    conn.credentials_json = new_creds
+    db.add(conn)
+    db.commit()
+    return {"status": "success"}
 
 @router.post("/integrations/connections")
-def save_connection(creds: PlatformCredentials, db: Session = Depends(get_db), user = Depends(has_role(Role.MANAGER))):
+def save_connection(creds: PlatformCredentials, db: Session = Depends(get_db)):
     platform = creds.platform.lower()
     if platform not in ["jira", "github"]:
         raise HTTPException(status_code=400, detail="Invalid platform")
@@ -814,7 +913,7 @@ def get_active_session(db: Session = Depends(get_db), user: TokenData = Depends(
     # Find active session for user
     session_obj = db.query(AuditSession).filter(
         AuditSession.user_id == user.user_id,
-        AuditSession.status == "IN_PROGRESS"
+        AuditSession.status.in_(["IN_PROGRESS", "COMPLETED"])
     ).order_by(AuditSession.id.desc()).first()
 
     if not session_obj:

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useProject } from "../context/ProjectContext";
 import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Database, Plus, RefreshCw, Plug, Trash2, ArrowUpRight, Check, Save } from "lucide-react";
+import { CheckCircle, Database, Plus, RefreshCw, Plug, Trash2, ArrowUpRight, Check, Save, ArrowLeft, ArrowRight } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 import api from "../api/client";
 
@@ -11,7 +11,7 @@ function ProjectSetupPage() {
     setProjectDataConfirmed,
   } = useProject();
 
-  const { auditSession, fetchActiveSession, fetchPlatform, getActualFeatures, saveActualData, confirmCalendar, getCapacityPreview, error, setError, sessionLoading } = useAudit();
+  const { auditSession, fetchActiveSession, fetchPlatform, getActualFeatures, saveActualData, confirmCalendar, getCapacityPreview, error, setError, sessionLoading, registerStepAction } = useAudit();
   const navigate = useNavigate();
 
   const [actualFeatures, setActualFeatures] = useState([]);
@@ -194,6 +194,18 @@ function ProjectSetupPage() {
       setSavingCalendar(false);
     }
   };
+
+  useEffect(() => {
+    registerStepAction({
+      onNext: async () => {
+        if (actualFeatures.length > 0) {
+          await handleSaveAndApprove();
+        } else {
+          navigate("/normalization");
+        }
+      }
+    });
+  });
 
   const isPlatformValid = connections.length > 0;
 
@@ -426,15 +438,6 @@ function ProjectSetupPage() {
               </div>
             </div>
             
-            <div className="flex justify-end p-6 border-t border-hairline bg-beige/30">
-              <button
-                  onClick={handleSaveAndApprove}
-                  disabled={savingActual || savingCalendar}
-                  className="h-12 px-6 rounded-full bg-ink text-background text-sm font-medium inline-flex items-center hover:opacity-90 transition disabled:opacity-50"
-              >
-                  {savingActual ? "Saving Data & Calendar..." : "Approve Data & Continue to Normalization →"}
-              </button>
-            </div>
           </div>
         ) : hasFetched ? (
           <div className="soft-card p-10 text-center mt-10">

@@ -360,7 +360,7 @@ async def get_row_intelligence(
     from backend.llm.manager import LLMManager
     import json
     
-    prompt = f"""You are ScopeSense's AI intelligence engine. Analyze the following project requirement delay details and generate a concise root cause explanation, 5 relevant context-aware FAQs, and a system prompt for chatbot Q&A.
+    prompt = f"""You are ScopeSense's AI intelligence engine. Analyze the following project requirement delay details and generate a concise, definitive root cause explanation, 5 relevant context-aware FAQs, and a system prompt for chatbot Q&A.
 
 Requirement details:
 - Module: {row.get('module')}
@@ -376,11 +376,12 @@ CRITICAL RULES FOR INTERPRETATION:
 1. "Actual Hours = 0" does NOT mean the ticket does not exist. If 'Evidence/Tickets' lists a ticket, it means a ticket exists and is assigned, but the developer simply has NOT LOGGED any time (Time Spent) against it yet.
 2. A Negative Variance (e.g., -20h) means the task is under-budget or unstarted. A Positive Variance means the task took longer than planned (overrun).
 3. Do not falsely claim "no ticket exists" if there is an item in the Evidence/Tickets field.
+4. BE SPECIFIC AND DEFINITIVE: Do NOT use vague speculation or hedging words like 'either... or', 'possibly', or 'might be'. State the direct operational root cause clearly and authoritatively in 2 to 3 punchy sentences.
 
 Respond strictly in JSON format. The response must be a single JSON object with these exact keys:
-- root_cause: A detailed one-paragraph summary explaining the potential root cause of this delay (e.g. why there is a variance, potential estimation errors, or development issues).
+- root_cause: A crisp, strong, authoritative 2-to-3 sentence executive root cause explanation. Directly state the key takeaway (e.g., pending time-logging, blocker bottleneck, or estimation mismatch) without hedging.
 - severity: "high", "medium", or "low"
-- faqs: A list of exactly 5 objects, each with "question" and "answer" keys.
+- faqs: A list of exactly 5 objects, each with "question" and "answer" keys. Keep answers concise (1-2 sentences).
 - system_prompt: A system prompt tailored for a chatbot helping the manager answer further questions about this specific requirement.
 """
 

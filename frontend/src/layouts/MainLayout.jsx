@@ -1,7 +1,8 @@
-import { useLocation, Link } from "react-router-dom";
-import { Check } from "lucide-react";
+import { useLocation, Link, useNavigate } from "react-router-dom";
+import { Check, ArrowLeft, ArrowRight } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
+import { useAudit } from "../context/AuditContext";
 
 const STEPS = [
   { to: "/upload-srs", label: "Upload SRS" },
@@ -14,29 +15,89 @@ const STEPS = [
 ];
 
 function WorkflowProgress({ pathname }) {
+  const navigate = useNavigate();
+  const { stepActionRef } = useAudit();
   const currentIdx = STEPS.findIndex(s => pathname === s.to || pathname.startsWith(s.to));
   const active = currentIdx >= 0;
   if (!active) return null;
+
+  const prevStep = currentIdx > 0 ? STEPS[currentIdx - 1] : null;
+  const nextStep = currentIdx < STEPS.length - 1 ? STEPS[currentIdx + 1] : null;
+
+  const handleBack = async (e) => {
+    e.preventDefault();
+    if (stepActionRef?.current?.onPrev) {
+      await stepActionRef.current.onPrev();
+    } else if (prevStep) {
+      navigate(prevStep.to);
+    }
+  };
+
+  const handleNext = async (e) => {
+    e.preventDefault();
+    if (stepActionRef?.current?.onNext) {
+      await stepActionRef.current.onNext();
+    } else if (nextStep) {
+      navigate(nextStep.to);
+    }
+  };
+
   return (
-    <div className="border-b border-hairline bg-beige/30">
-      <div className="px-6 lg:px-10 py-3 flex items-center gap-2 overflow-x-auto">
-        {STEPS.map((s, i) => {
-          const done = i < currentIdx;
-          const cur = i === currentIdx;
-          return (
-            <div key={s.to} className="flex items-center gap-2 shrink-0">
-              <div className={`size-6 rounded-full grid place-items-center text-[10px] font-medium border ${
-                done ? "bg-success/40 border-success text-ink" :
-                cur ? "bg-ink text-background border-ink" :
-                "bg-card border-hairline text-subtext"
-              }`}>
-                {done ? <Check className="size-3" /> : i + 1}
-              </div>
-              <span className={`text-xs ${cur ? "text-ink font-medium" : "text-subtext"}`}>{s.label}</span>
-              {i < STEPS.length - 1 && <div className={`w-8 h-px ${done ? "bg-success" : "bg-hairline"}`} />}
-            </div>
-          );
-        })}
+    <div className="border-b border-hairline bg-background/95 backdrop-blur sticky top-16 z-20">
+      <div className="px-6 lg:px-10 py-2.5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 overflow-x-auto py-1">
+          {STEPS.map((s, i) => {
+            const done = i < currentIdx;
+            const cur = i === currentIdx;
+            return (
+              <Link key={s.to} to={s.to} className="flex items-center gap-2 shrink-0 group">
+                <div className={`size-6 rounded-full grid place-items-center text-[10px] font-medium border transition ${
+                  done ? "bg-success/40 border-success text-ink group-hover:bg-success/60" :
+                  cur ? "bg-ink text-background border-ink" :
+                  "bg-card border-hairline text-subtext group-hover:border-ink/40"
+                }`}>
+                  {done ? <Check className="size-3" /> : i + 1}
+                </div>
+                <span className={`text-xs transition ${cur ? "text-ink font-bold" : "text-subtext group-hover:text-ink"}`}>{s.label}</span>
+                {i < STEPS.length - 1 && <div className={`w-6 h-px ${done ? "bg-success" : "bg-hairline"}`} />}
+              </Link>
+            );
+          })}
+        </div>
+        
+        <div className="flex items-center gap-2 shrink-0 border-l border-hairline pl-4">
+          {prevStep ? (
+            <button 
+              onClick={handleBack}
+              className="h-8 px-3 rounded-lg border border-hairline bg-card hover:bg-secondary transition text-xs font-semibold text-ink flex items-center gap-1 shadow-sm cursor-pointer"
+              title={`Go back to ${prevStep.label}`}
+            >
+              <ArrowLeft className="size-3.5" />
+              <span>Back</span>
+            </button>
+          ) : (
+            <button disabled className="h-8 px-3 rounded-lg border border-hairline bg-card/40 opacity-40 text-xs font-semibold text-subtext flex items-center gap-1 cursor-not-allowed">
+              <ArrowLeft className="size-3.5" />
+              <span>Back</span>
+            </button>
+          )}
+          
+          {nextStep ? (
+            <button 
+              onClick={handleNext}
+              className="h-8 px-3.5 rounded-lg bg-ink text-background hover:opacity-90 transition text-xs font-bold flex items-center gap-1 shadow-sm cursor-pointer"
+              title={`Move next to ${nextStep.label}`}
+            >
+              <span>Next</span>
+              <ArrowRight className="size-3.5" />
+            </button>
+          ) : (
+            <button disabled className="h-8 px-3.5 rounded-lg bg-ink/40 opacity-40 text-background text-xs font-bold flex items-center gap-1 cursor-not-allowed">
+              <span>Next</span>
+              <ArrowRight className="size-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

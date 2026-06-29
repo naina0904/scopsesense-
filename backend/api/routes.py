@@ -3,8 +3,10 @@ from fastapi import (
     UploadFile,
     File,
     Form,
-    HTTPException
+    HTTPException,
+    Depends
 )
+from backend.auth.jwt_utils import get_current_user, TokenData
 
 from fastapi.responses import (
     JSONResponse
@@ -168,7 +170,7 @@ async def test_route():
 # =================================================
 
 @router.get("/github/repos/{owner}")
-async def get_repositories(owner: str):
+async def get_repositories(owner: str, user: TokenData = Depends(get_current_user)):
 
     try:
 
@@ -262,7 +264,9 @@ async def start_audit(
 
     provider: str = Form(...),
 
-    srs_file: UploadFile = File(...)
+    srs_file: UploadFile = File(...),
+
+    user: TokenData = Depends(get_current_user)
 ):
 
     try:
@@ -367,7 +371,9 @@ async def profile_repository(
 
     owner: str = Form(...),
 
-    repository: str = Form(...)
+    repository: str = Form(...),
+
+    user: TokenData = Depends(get_current_user)
 ):
 
     try:
@@ -408,7 +414,8 @@ async def profile_repository(
 @router.get("/task/{task_id}")
 async def get_task_progress(
 
-    task_id: str
+    task_id: str,
+    user: TokenData = Depends(get_current_user)
 ):
 
     try:
@@ -444,7 +451,7 @@ async def get_task_progress(
 # =================================================
 
 @router.get("/analytics/overview")
-async def analytics_overview():
+async def analytics_overview(user: TokenData = Depends(get_current_user)):
 
     db = None
 
@@ -514,7 +521,7 @@ async def analytics_overview():
 # =================================================
 
 @router.get("/audits/history")
-async def audit_history():
+async def audit_history(user: TokenData = Depends(get_current_user)):
 
     db = None
 
@@ -584,7 +591,7 @@ async def audit_history():
 # =================================================
 
 @router.get("/contributors/history")
-async def contributor_history():
+async def contributor_history(user: TokenData = Depends(get_current_user)):
 
     db = None
 
@@ -652,7 +659,7 @@ async def contributor_history():
 # =================================================
 
 @router.get("/features/history")
-async def feature_history():
+async def feature_history(user: TokenData = Depends(get_current_user)):
 
     latest = _latest_audit_payload()
 
@@ -680,7 +687,7 @@ async def feature_history():
 # =================================================
 
 @router.get("/analytics/history")
-async def analytics_history():
+async def analytics_history(user: TokenData = Depends(get_current_user)):
 
     data = await audit_history()
 
@@ -695,7 +702,7 @@ async def analytics_history():
 # =================================================
 
 @router.get("/analytics/risks")
-async def analytics_risks():
+async def analytics_risks(user: TokenData = Depends(get_current_user)):
 
     latest = _latest_audit_payload()
 
@@ -709,7 +716,7 @@ async def analytics_risks():
 # =================================================
 
 @router.get("/analytics/roadmap")
-async def analytics_roadmap():
+async def analytics_roadmap(user: TokenData = Depends(get_current_user)):
 
     latest = _latest_audit_payload()
 
@@ -726,7 +733,8 @@ async def analytics_roadmap():
 async def latest_audit(
     owner: str | None = None,
     repo: str | None = None,
-    normalize: bool = False
+    normalize: bool = False,
+    user: TokenData = Depends(get_current_user)
 ):
 
     return {

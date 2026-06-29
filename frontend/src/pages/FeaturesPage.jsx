@@ -2,19 +2,31 @@ import {
     useEffect,
     useState
 } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 
 import FeatureCard from "../components/FeatureCard";
+import { useAudit } from "../context/AuditContext";
 
 // ZIP binary header as it appears when a DOCX/XLSX blob is misread as text
 const ZIP_BINARY_PREFIX = "PK\u0003\u0004";
 
 function FeaturesPage() {
+    const navigate = useNavigate();
+    const { registerStepAction } = useAudit();
 
     const [features, setFeatures] = useState([]);
     const [hasAudit, setHasAudit] = useState(false);
+
+    useEffect(() => {
+        registerStepAction({
+            onPrev: () => navigate("/upload-srs"),
+            onNext: () => navigate("/configuration")
+        });
+    });
 
     useEffect(() => {
 
