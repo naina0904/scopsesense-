@@ -122,9 +122,12 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
         db.commit()
         
         try:
-            # Get fresh normalized data dynamically
-            from backend.api.confirmation_routes import merge_normalized_data
-            features = merge_normalized_data(db, session)
+            # Get fresh normalized data dynamically (or saved dataset if approved)
+            if session.normalized_data_json and len(session.normalized_data_json) > 0:
+                features = session.normalized_data_json
+            else:
+                from backend.api.confirmation_routes import merge_normalized_data
+                features = merge_normalized_data(db, session)
             variance_table = []
             developer_stats = {}
             total_planned = 0
@@ -231,9 +234,9 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                 variance_table.append({
                     "module": data["module"],
                     "requirement": req_name,
-                    "planned_hours": data["planned_hours"],
-                    "actual_hours": data["actual_hours"],
-                    "variance": variance,
+                    "planned_hours": round(data["planned_hours"], 1),
+                    "actual_hours": round(data["actual_hours"], 1),
+                    "variance": round(variance, 1),
                     "status": data["status"],
                     "developer": ", ".join(data["devs"]) if data["devs"] else "Unassigned",
                     "severity": "high" if variance > 10 else "medium" if variance > 0 else "low",
@@ -249,9 +252,9 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                 developer_table.append({
                     "developer": dev,
                     "assigned_modules": list(stats["modules"]),
-                    "planned_hours": stats["planned"],
-                    "actual_hours": stats["actual"],
-                    "variance": dev_var,
+                    "planned_hours": round(stats["planned"], 1),
+                    "actual_hours": round(stats["actual"], 1),
+                    "variance": round(dev_var, 1),
                     "efficiency": round(eff, 2)
                 })
                 
@@ -298,11 +301,11 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
             health_score = max(0, min(100, int(base_score)))
             
             # D. Predicted Delay
-            remaining_effort = sum(
+            remaining_effort = round(sum(
                 max(0, float(f.get("planned_hours") or 0) - float(f.get("actual_hours") or 0))
                 for f in features 
                 if str(f.get("status", "")).lower() not in ("done", "completed", "resolved", "closed")
-            )
+            ), 1)
             profile = session.calendar_profile
             working_days_count = len(profile.working_days) if profile and profile.working_days else 5
             hours_per_day = profile.hours_per_day if profile and profile.hours_per_day else 8
@@ -448,14 +451,19 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
             )
             db.add(audit_result)
             
+            db.query(FAQRecord).filter(FAQRecord.audit_session_id == session_id).delete()
+            seen_questions = set()
             for faq in variance_json["faqs"]:
-                db.add(FAQRecord(
-                    audit_session_id=session_id,
-                    question=faq["question"],
-                    answer=faq["answer"],
-                    category=faq["category"],
-                    relevance_score=faq["relevance_score"]
-                ))
+                q_norm = (faq["question"] or "").strip().lower()
+                if q_norm not in seen_questions:
+                    seen_questions.add(q_norm)
+                    db.add(FAQRecord(
+                        audit_session_id=session_id,
+                        question=faq["question"],
+                        answer=faq["answer"],
+                        category=faq["category"],
+                        relevance_score=faq["relevance_score"]
+                    ))
                 
             session.status = "COMPLETED"
             session.progress_percent = 100

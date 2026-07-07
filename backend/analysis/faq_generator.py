@@ -107,13 +107,26 @@ class FAQGenerator:
         # Q9: Overall status
         candidates.append(self._generate_overall_status_faq())
         
-        # Sort by relevance and keep the strongest contract-compliant set.
         candidates.sort(key=lambda f: f.relevance_score, reverse=True)
-        faqs = candidates[:5]
+        seen_questions = set()
+        faqs = []
+        for f in candidates:
+            q_norm = (f.question or "").strip().lower()
+            if q_norm not in seen_questions:
+                seen_questions.add(q_norm)
+                faqs.append(f)
+            if len(faqs) == 5:
+                break
         
-        # If we have fewer than 5, fill with generic questions
-        while len(faqs) < 5:
-            faqs.append(self._generate_generic_faq(len(faqs)))
+        # If we have fewer than 5, fill with unique generic questions
+        idx = 0
+        while len(faqs) < 5 and idx < 20:
+            gen_f = self._generate_generic_faq(idx)
+            q_norm = (gen_f.question or "").strip().lower()
+            if q_norm not in seen_questions:
+                seen_questions.add(q_norm)
+                faqs.append(gen_f)
+            idx += 1
         
         return faqs
     

@@ -43,26 +43,32 @@ class GroqProvider:
 class GeminiProvider:
 
     def __init__(self):
-
-        from google import genai
-
-        self.client = genai.Client(
-            api_key=settings.GEMINI_API_KEY
-        )
-
         self.model_name = getattr(settings, "GEMINI_MODEL", "gemini-pro")
+        try:
+            from google import genai
+            self.client = genai.Client(
+                api_key=settings.GEMINI_API_KEY
+            )
+            self.sdk_version = "new"
+        except ImportError:
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            self.model = genai.GenerativeModel(self.model_name)
+            self.sdk_version = "old"
 
     def generate(
         self,
         prompt
     ):
-
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt
-        )
-
-        return response.text
+        if getattr(self, "sdk_version", "new") == "new":
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
+            return response.text
+        else:
+            response = self.model.generate_content(prompt)
+            return response.text
 
 
 class OllamaProvider:

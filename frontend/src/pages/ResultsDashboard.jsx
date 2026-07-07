@@ -12,7 +12,10 @@ function ResultsDashboard() {
   const [provider, setProvider] = useState("groq");
   const { auditResult, auditSession, loading, error, fetchAuditResult, registerStepAction } = useAudit();
   
-  const faqs = auditResult?.faqs || auditResult?.faq_table?.items || [];
+  const rawFaqs = auditResult?.faqs || auditResult?.faq_table?.items || [];
+  const faqs = rawFaqs.filter((faq, idx, self) =>
+    idx === self.findIndex(f => (f.question || "").trim().toLowerCase() === (faq.question || "").trim().toLowerCase())
+  );
 
   useEffect(() => {
     if (!auditResult) {

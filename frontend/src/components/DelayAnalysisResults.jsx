@@ -18,10 +18,32 @@ function DelayAnalysisResults({ results }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatQuestion, setChatQuestion] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [auditScopeMode, setAuditScopeMode] = useState(() => localStorage.getItem("auditScopeMode") || "full_lifecycle");
 
   const tableItems = (table) => Array.isArray(table) ? table : table?.items || [];
-  const varianceRows = tableItems(results.variance_table);
+  const rawVarianceRows = tableItems(results.variance_table);
   const developerRows = tableItems(results.developer_table);
+
+  const isTestingRow = (row) => {
+    const mod = (row?.module || "").toLowerCase().trim();
+    const req = (row?.requirement || "").toLowerCase().trim();
+    return mod === "project phases" || req.includes("internal testing");
+  };
+
+  const isIgnoredRow = (row) => {
+    const req = (row?.requirement || "").toLowerCase().trim();
+    return ["client testing", "deployment", "external testing"].includes(req);
+  };
+
+  const cleanedVarianceRows = rawVarianceRows.filter(r => !isIgnoredRow(r));
+  const varianceRows = cleanedVarianceRows.filter(r => auditScopeMode === "core_dev" ? !isTestingRow(r) : true);
+
+  const activePlannedHours = varianceRows.reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
+  const activeActualHours = varianceRows.reduce((sum, r) => sum + (Number(r.actual_hours) || 0), 0);
+  const activeVariance = activeActualHours - activePlannedHours;
+
+  const corePlannedHours = cleanedVarianceRows.filter(r => !isTestingRow(r)).reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
+  const fullPlannedHours = cleanedVarianceRows.reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
 
   const handleRowClick = async (row) => {
     setSelectedRow(row);
@@ -92,11 +114,42 @@ function DelayAnalysisResults({ results }) {
                 : "recently"}
            </em>.
          </h2>
-         <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-           <Headline tone="bg-info/40" label="SRS Roadmap Variance" value={`${results.srs_schedule_variance ?? results.schedule_variance ?? 0}h`} sub="Pure baseline slip" />
-           <Headline tone="bg-rose/20" label="Ghost Scope Creep" value={`${results.ghost_hours > 0 ? '+' : ''}${results.ghost_hours ?? 0}h`} sub="Unbudgeted drift" />
-           <Headline tone="bg-emerald/30" label="Remaining Work" value={`${results.remaining_effort ?? 0}h`} sub="Open tasks" />
-           <Headline tone="bg-beige" label="Predicted Delay" value={`${results.predicted_delay ?? 0}w`} sub="Forecasted slip" />
+         <div className="mt-8 bg-card/80 backdrop-blur border border-hairline rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+           <div>
+             <div className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
+               <Sparkles className="size-3.5" /> Dynamic Audit Scope Mode
+             </div>
+             <div className="text-sm font-medium text-ink mt-0.5">
+               {auditScopeMode === "full_lifecycle" 
+                 ? `Full Lifecycle Scope (${fullPlannedHours.toFixed(1)}h across ${cleanedVarianceRows.length} items)` 
+                 : `Core Engineering Scope (${corePlannedHours.toFixed(1)}h across ${cleanedVarianceRows.filter(r => !isTestingRow(r)).length} items)`}
+             </div>
+           </div>
+           <div className="flex bg-beige/40 p-1 rounded-xl border border-hairline shrink-0">
+             <button
+               onClick={() => { setAuditScopeMode("full_lifecycle"); localStorage.setItem("auditScopeMode", "full_lifecycle"); }}
+               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                 auditScopeMode === "full_lifecycle" ? "bg-ink text-background shadow" : "text-subtext hover:text-ink"
+               }`}
+             >
+               Full Lifecycle + Testing
+             </button>
+             <button
+               onClick={() => { setAuditScopeMode("core_dev"); localStorage.setItem("auditScopeMode", "core_dev"); }}
+               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                 auditScopeMode === "core_dev" ? "bg-ink text-background shadow" : "text-subtext hover:text-ink"
+               }`}
+             >
+               Design & Dev Only
+             </button>
+           </div>
+         </div>
+
+         <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+           <Headline tone="bg-info/40" label="SRS Roadmap Variance" value={`${auditScopeMode === "core_dev" ? activeVariance.toFixed(1) : Number(results.srs_schedule_variance ?? results.schedule_variance ?? 0).toFixed(1)}h`} sub={auditScopeMode === "core_dev" ? "Core dev baseline slip" : "Full roadmap slip"} />
+           <Headline tone="bg-rose/20" label="Ghost Scope Creep" value={`${results.ghost_hours > 0 ? '+' : ''}${Number(results.ghost_hours ?? 0).toFixed(1)}h`} sub="Unplanned / unbudgeted tasks" />
+           <Headline tone="bg-emerald/30" label="Remaining Work" value={`${varianceRows.reduce((sum, r) => sum + Math.max(0, (Number(r.planned_hours)||0) - (Number(r.actual_hours)||0)), 0).toFixed(1)}h`} sub={`Open ${auditScopeMode === "core_dev" ? "dev" : "project"} tasks`} />
+           <Headline tone="bg-beige" label="Predicted Delay" value={`${Number(results.predicted_delay ?? 0).toFixed(1)}w`} sub="Forecasted slip" />
          </div>
       </section>
 
@@ -166,10 +219,10 @@ function DelayAnalysisResults({ results }) {
                  >
                    <div className="col-span-2 text-sm text-subtext">{row.module}</div>
                    <div className="col-span-4 text-sm font-medium text-ink pr-4">{row.requirement}</div>
-                   <div className="col-span-1 text-center text-sm">{row.planned_hours}h</div>
-                   <div className="col-span-1 text-center text-sm">{row.actual_hours}h</div>
+                   <div className="col-span-1 text-center text-sm">{Number(row.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
+                   <div className="col-span-1 text-center text-sm">{Number(row.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
                    <div className={`col-span-1 text-center text-sm font-bold ${row.variance > 0 ? "text-risk" : row.variance < 0 ? "text-success" : "text-subtext"}`}>
-                     {row.variance > 0 ? `+${row.variance}` : row.variance}h
+                     {row.variance > 0 ? `+${Number(row.variance).toFixed(1).replace(/\.0$/, '')}` : Number(row.variance || 0).toFixed(1).replace(/\.0$/, '')}h
                    </div>
                    <div className="col-span-2 flex justify-center">
                      <span className={`px-3 py-1 text-xs font-medium rounded-full min-w-[85px] text-center inline-block ${statusColor}`}>
@@ -190,8 +243,19 @@ function DelayAnalysisResults({ results }) {
       </div>
 
       <div className="soft-card overflow-hidden">
-        <div className="px-8 py-6 border-b border-hairline">
-          <h3 className="font-display text-2xl">Developer Performance</h3>
+        <div className="px-8 py-6 border-b border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-beige/10">
+          <div>
+            <h3 className="font-display text-2xl">Developer Performance</h3>
+            <p className="text-xs text-subtext mt-1 max-w-xl">
+              💡 <strong className="text-ink">Reconciliation Note:</strong> Developer Actuals & Variance include both Planned SRS tasks and Unbudgeted Ghost Work ({results.ghost_hours > 0 ? `+${Number(results.ghost_hours).toFixed(1)}h ghost scope creep across team` : '0h ghost work'}).
+            </p>
+          </div>
+          <div className="text-right shrink-0 bg-card border border-hairline px-4 py-2 rounded-2xl shadow-sm">
+            <div className="text-[10px] uppercase tracking-wider text-subtext font-bold">Team Total Variance</div>
+            <div className="text-base font-display font-bold text-ink">
+              {Number(results.schedule_variance || 0).toFixed(1)}h <span className="text-xs font-normal text-subtext">(SRS {Number(results.srs_schedule_variance || 0).toFixed(1)}h + Ghost +{Number(results.ghost_hours || 0).toFixed(1)}h)</span>
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[800px]">
@@ -211,10 +275,10 @@ function DelayAnalysisResults({ results }) {
                      {(row.assigned_modules || []).slice(0, 3).join(", ")}
                      {(row.assigned_modules && row.assigned_modules.length > 3) ? `, +${row.assigned_modules.length - 3} more` : ""}
                    </div>
-                   <div className="col-span-1 text-center text-sm">{row.planned_hours}h</div>
-                   <div className="col-span-1 text-center text-sm">{row.actual_hours}h</div>
+                   <div className="col-span-1 text-center text-sm">{Number(row.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
+                   <div className="col-span-1 text-center text-sm">{Number(row.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
                    <div className={`col-span-2 text-center text-sm font-bold ${row.variance > 0 ? "text-risk" : row.variance < 0 ? "text-success" : "text-subtext"}`}>
-                     {row.variance > 0 ? `+${row.variance}` : row.variance}h
+                     {row.variance > 0 ? `+${Number(row.variance).toFixed(1).replace(/\.0$/, '')}` : Number(row.variance || 0).toFixed(1).replace(/\.0$/, '')}h
                    </div>
                    <div className="col-span-1 text-center text-sm font-medium">
                      {Math.round(row.efficiency || 0)}%
@@ -257,16 +321,16 @@ function DelayAnalysisResults({ results }) {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-card border border-hairline p-4 rounded-2xl">
                       <p className="text-[10px] uppercase tracking-wider text-subtext">Planned</p>
-                      <p className="text-xl font-display mt-1">{selectedRow.planned_hours}h</p>
+                      <p className="text-xl font-display mt-1">{Number(selectedRow.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</p>
                     </div>
                     <div className="bg-card border border-hairline p-4 rounded-2xl">
                       <p className="text-[10px] uppercase tracking-wider text-subtext">Actual</p>
-                      <p className="text-xl font-display mt-1">{selectedRow.actual_hours}h</p>
+                      <p className="text-xl font-display mt-1">{Number(selectedRow.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</p>
                     </div>
                     <div className={`border p-4 rounded-2xl ${selectedRow.variance > 0 ? "bg-rose/10 border-rose/30" : "bg-pista/10 border-pista/30"}`}>
                       <p className="text-[10px] uppercase tracking-wider text-subtext">Variance</p>
                       <p className={`text-xl font-display mt-1 ${selectedRow.variance > 0 ? "text-risk" : "text-success"}`}>
-                        {selectedRow.variance > 0 ? `+${selectedRow.variance}` : selectedRow.variance}h
+                        {selectedRow.variance > 0 ? `+${Number(selectedRow.variance).toFixed(1).replace(/\.0$/, '')}` : Number(selectedRow.variance || 0).toFixed(1).replace(/\.0$/, '')}h
                       </p>
                     </div>
                   </div>
@@ -294,7 +358,11 @@ function DelayAnalysisResults({ results }) {
                           Contextual FAQs
                         </h4>
                         <div className="space-y-2">
-                          {rowIntelligence.faqs?.map((faq, idx) => (
+                          {(rowIntelligence.faqs || [])
+                            .filter((faq, idx, self) =>
+                              idx === self.findIndex(f => (f.question || "").trim().toLowerCase() === (faq.question || "").trim().toLowerCase())
+                            )
+                            .map((faq, idx) => (
                             <div key={idx} className="border border-hairline bg-card rounded-2xl overflow-hidden">
                               <button
                                 className="w-full text-left px-4 py-3 flex justify-between items-center text-sm font-medium hover:bg-secondary/50 transition"

@@ -83,8 +83,25 @@ class WorkbookParser:
         """
         try:
             features = []
+            self.project_developers = []
             
             with pd.ExcelFile(file_path) as xls:
+                devs_set = set()
+                for s in xls.sheet_names:
+                    try:
+                        sdf = pd.read_excel(xls, sheet_name=s)
+                        for val in sdf.values.flatten():
+                            if pd.notna(val):
+                                v_str = str(val).strip()
+                                if re.search(r"\([s|a]\d[^)]*\)|\(junior|\(mid|\(senior|\(dev", v_str, re.IGNORECASE):
+                                    if len(v_str) < 60 and not any(w in v_str.lower() for w in ["%", "d&d", "testing", "phase", "hours", "hrs", "total", "summary"]):
+                                        devs_set.add(v_str)
+                                        mapped = ResourceMappingService.map_resource(v_str)
+                                        if mapped != "Unassigned":
+                                            devs_set.add(mapped)
+                    except Exception:
+                        pass
+                self.project_developers = sorted(list(devs_set))
                 for sheet_name in xls.sheet_names:
                     df = pd.read_excel(xls, sheet_name=sheet_name)
                     
@@ -120,7 +137,12 @@ class WorkbookParser:
                         # Handle Feature
                         feature_val = str(row[feature_col]).strip()
                         if not feature_val or feature_val.lower() == "nan" or feature_val.lower() == "none":
-                            continue
+                            row_str = " ".join([str(val) for val in row.values if pd.notna(val)]).strip()
+                            if any(p in row_str.lower() for p in ["internal testing", "client testing", "deployment"]):
+                                candidates = [val for val in row.values if pd.notna(val) and any(p in str(val).lower() for p in ["internal testing", "client testing", "deployment"])]
+                                feature_val = str(candidates[0]).strip() if candidates else ""
+                            if not feature_val or feature_val.lower() == "nan" or feature_val.lower() == "none":
+                                continue
                             
                         # Handle Module (Downward Propagation)
                         has_explicit_module = False
@@ -152,8 +174,8 @@ class WorkbookParser:
                                     hours_val = 0.0
                                     
                         norm_feat = feature_val.lower().strip()
-                        if norm_feat in ["design and development", "design and deployment", "total estimated hours", "total"]:
-                            print(f"[WorkbookParser] Ignoring summary header row: '{feature_val}'")
+                        if norm_feat in ["design and development", "design and deployment", "total estimated hours", "total", "client testing", "deployment", "external testing"] or re.search(r"\([sa]\d\s*developer\)\s*$", norm_feat):
+                            print(f"[WorkbookParser] Ignoring summary or resource roll-up row: '{feature_val}'")
                             continue
                             
                         # Structural Global Phase Check
@@ -163,13 +185,11 @@ class WorkbookParser:
                         else:
                             module_val = current_module
                             
-                        # Fallback for uncalculated formula values in known lifecycle phases
+                        # Use dynamic calculation for lifecycle phases only if uncalculated in SRS
                         if hours_val == 0.0 and total_accumulated_hours > 0:
                             if "internal testing" in norm_feat:
                                 hours_val = round(total_accumulated_hours * 0.2, 1)
-                            elif "client testing" in norm_feat:
-                                hours_val = round(total_accumulated_hours * 0.1, 1)
-                            elif "deployment" in norm_feat:
+                            elif "client testing" in norm_feat or "deployment" in norm_feat:
                                 hours_val = round(total_accumulated_hours * 0.1, 1)
                                 
                         if module_val != "Project Phases":
@@ -181,6 +201,17 @@ class WorkbookParser:
                             if raw_resource.lower() not in ["nan", "none", ""]:
                                 resource_val = ResourceMappingService.map_resource(raw_resource)
                                 
+                        # Handle developer name embedded in Feature column e.g. "Order Management (Sachin)"
+                        if resource_val == "Unassigned":
+                            feat_res_match = re.search(r"\(([^)]+)\)\s*$", feature_val)
+                            if feat_res_match:
+                                raw_res = feat_res_match.group(1).strip()
+                                # Do not treat phase descriptions or percentages like "(20% of D&D)" as developers
+                                if not any(w in raw_res.lower() for w in ["%", "d&d", "testing", "phase", "hours", "hrs", "of"]):
+                                    mapped = ResourceMappingService.map_resource(raw_res)
+                                    resource_val = mapped if mapped != "Unassigned" else raw_res
+                                feature_val = re.sub(r"\s*\([^)]+\)\s*$", "", feature_val).strip()
+
                         if resource_val == "Unassigned":
                             if "internal testing" in norm_feat:
                                 resource_val = "S2 (Mid-Level Developer)"

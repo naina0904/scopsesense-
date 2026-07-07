@@ -23,13 +23,37 @@ function NormalizationPage() {
     fetchActiveSession().catch(() => {});
   }, [fetchActiveSession]);
 
+  const isTestingRow = (row) => {
+    const mod = (row?.module || "").toLowerCase().trim();
+    const req = (row?.requirement || "").toLowerCase().trim();
+    return mod === "project phases" || req.includes("internal testing");
+  };
+
   useEffect(() => {
     if (auditSession?.id) {
       setLoadingNorm(true);
       getNormalizationData()
         .then((res) => {
           if (res && res.normalization_data) {
-            setNormData(res.normalization_data);
+            const scopeMode = localStorage.getItem("auditScopeMode") || "full_lifecycle";
+            const processedData = res.normalization_data.map(item => {
+              if (scopeMode === "core_dev" && isTestingRow(item)) {
+                const planned = 0.0;
+                const actual = parseFloat(item.actual_hours) || 0.0;
+                let reqName = item.requirement || "";
+                if (!reqName.startsWith("[Excluded Phase]")) {
+                  reqName = "[Excluded Phase] " + reqName.replace(/^\[(Drift|Excluded Phase)\]\s*/i, "");
+                }
+                return {
+                  ...item,
+                  requirement: reqName,
+                  planned_hours: planned,
+                  hours_remaining: planned - actual
+                };
+              }
+              return item;
+            });
+            setNormData(processedData);
           }
         })
         .catch((err) => {
@@ -106,7 +130,14 @@ function NormalizationPage() {
             <div className="px-6 py-5 border-b border-hairline flex items-center justify-between">
               <div>
                 <h3 className="font-display text-2xl">Merged Canonical Audit Dataset</h3>
-                <p className="text-subtext text-sm">Make direct overrides to hours, status, or assignees.</p>
+                <p className="text-subtext text-sm flex items-center gap-2 mt-1">
+                  Make direct overrides to hours, status, or assignees.
+                  {(localStorage.getItem("auditScopeMode") === "core_dev") && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold text-[11px] border border-primary/20">
+                      ⚡ Core Dev Scope Active: QA Testing phases excluded from baseline
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
 
@@ -123,6 +154,7 @@ function NormalizationPage() {
                 <div className="divide-y divide-hairline">
                   {normData.map((item, index) => {
                     const isDrift = item.requirement?.startsWith("[Drift]");
+                    const isExcluded = item.requirement?.startsWith("[Excluded Phase]");
                     return (
                       <div key={index} className="grid grid-cols-12 px-6 py-3 items-center hover:bg-secondary/50 transition gap-4">
                         <div className="col-span-2">
@@ -138,7 +170,7 @@ function NormalizationPage() {
                             type="text"
                             value={item.requirement || ""}
                             onChange={(e) => handleFieldChange(index, "requirement", e.target.value)}
-                            className={`bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs font-medium w-full focus:outline-none focus:ring-1 focus:ring-ring ${isDrift ? "text-risk" : "text-ink"}`}
+                            className={`bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs font-medium w-full focus:outline-none focus:ring-1 focus:ring-ring ${isDrift ? "text-risk" : isExcluded ? "text-subtext italic" : "text-ink"}`}
                           />
                         </div>
                         <div className="col-span-2">
@@ -148,7 +180,7 @@ function NormalizationPage() {
                             value={item.planned_hours || 0}
                             onChange={(e) => handleFieldChange(index, "planned_hours", parseFloat(e.target.value) || 0)}
                             className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full text-center focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:bg-secondary"
-                            disabled={isDrift}
+                            disabled={isDrift || isExcluded}
                           />
                         </div>
                         <div className="col-span-2">

@@ -48,6 +48,8 @@ class SRSExtractionService:
                 })
             
         result["features"] = canonical_features
+        if 'wp' in locals() and hasattr(wp, 'project_developers'):
+            result["project_developers"] = wp.project_developers
 
         # store raw file path and extracted JSON
         srs_entry = self.srs_repo.save(

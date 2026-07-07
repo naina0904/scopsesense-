@@ -66,14 +66,18 @@ def get_session(session_id: str) -> dict:
         if audit_result:
             # Reconstruct minimal session dict from DB records
             # Reconstruct minimal session dict from DB records
+            seen_q = set()
             faqs = []
-            for faq in db.query(FAQRecord).filter(FAQRecord.audit_session_id == audit_session_id).all():
-                faqs.append({
-                    "question": faq.question,
-                    "answer": faq.answer,
-                    "category": faq.category,
-                    "relevance_score": faq.relevance_score,
-                })
+            for faq in db.query(FAQRecord).filter(FAQRecord.audit_session_id == audit_session_id).order_by(FAQRecord.relevance_score.desc()).all():
+                q_norm = (faq.question or "").strip().lower()
+                if q_norm not in seen_q:
+                    seen_q.add(q_norm)
+                    faqs.append({
+                        "question": faq.question,
+                        "answer": faq.answer,
+                        "category": faq.category,
+                        "relevance_score": faq.relevance_score,
+                    })
             result_payload = audit_result.variance_json or {}
             result_payload["faqs"] = faqs
             session_dict = {
@@ -395,7 +399,14 @@ Respond strictly in JSON format. The response must be a single JSON object with 
             response_text = response_text.split("```")[1].split("```")[0]
         data = json.loads(response_text.strip())
         
-        faqs = data.get("faqs", [])
+        raw_faqs = data.get("faqs", [])
+        seen_row_q = set()
+        faqs = []
+        for f in raw_faqs:
+            q_norm = (f.get("question") or "").strip().lower()
+            if q_norm and q_norm not in seen_row_q:
+                seen_row_q.add(q_norm)
+                faqs.append(f)
         if len(faqs) > 5:
             faqs = faqs[:5]
         
@@ -408,8 +419,38 @@ Respond strictly in JSON format. The response must be a single JSON object with 
             "fallback_used": manager.provider_used if manager.provider_used and manager.provider_used != manager.requested_provider else None
         }
     except Exception as e:
-        logger.error(f"Row intelligence generation failed: {e}")
-        raise HTTPException(status_code=503, detail="AI Analysis currently unavailable")
+        logger.warning(f"Row intelligence AI generation failed or rate-limited ({e}). Using deterministic heuristic fallback.")
+        dev = row.get("developer") or "Unassigned"
+        mod = row.get("module") or "General"
+        ev = row.get("evidence") or []
+        ev_str = ", ".join([str(x) for x in ev]) if isinstance(ev, list) else str(ev)
+        act = float(row.get("actual_hours") or 0.0)
+        pln = float(row.get("planned_hours") or 0.0)
+        var = float(row.get("variance") or 0.0)
+
+        if act == 0 and ev:
+            heuristic_rc = f"Ticket is assigned to developer '{dev}' in Jira ({ev_str}), but no work hours have been logged against it yet. This pending time tracking creates an apparent roadmap variance of {int(var)}h."
+        elif var > 0:
+            heuristic_rc = f"Development effort on requirement '{requirement}' exceeded planned capacity by {int(var)}h. Technical complexity or cross-component dependencies impacted developer delivery speed."
+        else:
+            heuristic_rc = f"Requirement '{requirement}' is operating within budget or unstarted, with {int(pln)}h planned vs {int(act)}h logged."
+
+        heuristic_faqs = [
+            {"question": f"Why does requirement '{requirement}' show a variance of {int(var)}h?", "answer": heuristic_rc},
+            {"question": f"Who is responsible for delivering '{requirement}'?", "answer": f"Developer '{dev}' is assigned to this requirement under module '{mod}'."},
+            {"question": "Are there Jira tickets tracked for this feature?", "answer": f"Yes, tracked under evidence IDs: {ev_str}." if ev_str else "No explicit Jira tickets or evidence items were matched to this requirement."},
+            {"question": "What immediate action should management take?", "answer": "Verify developer progress and ensure all time spent is logged accurately in Jira." if act == 0 else "Review potential blockers with the assigned engineer and re-evaluate sprint capacity."},
+            {"question": "How does this impact project milestone completion?", "answer": "Unresolved variance on core module requirements directly affects downstream integration and deployment timelines."}
+        ]
+
+        return {
+            "requirement": requirement,
+            "root_cause": heuristic_rc,
+            "severity": severity,
+            "faqs": heuristic_faqs,
+            "system_prompt": f"You are a chatbot helping answer questions about requirement '{requirement}'.",
+            "fallback_used": "Heuristic Engine"
+        }
 
 
 def _paginate(items: List[Dict[str, Any]], page: int, page_size: int) -> Dict[str, Any]:
@@ -450,15 +491,18 @@ def _result_payload_for_session(db: Session, session_id: int, user: TokenData) -
             lgr = get_logger(__name__)
             lgr.error("failed_to_persist_identity_resolution", error=str(e))
             
-    faqs = [
-        {
-            "question": faq.question,
-            "answer": faq.answer,
-            "category": faq.category,
-            "relevance_score": faq.relevance_score,
-        }
-        for faq in db.query(FAQRecord).filter(FAQRecord.audit_session_id == session_id).order_by(FAQRecord.relevance_score.desc()).all()
-    ]
+    seen_q = set()
+    faqs = []
+    for faq in db.query(FAQRecord).filter(FAQRecord.audit_session_id == session_id).order_by(FAQRecord.relevance_score.desc()).all():
+        q_norm = (faq.question or "").strip().lower()
+        if q_norm not in seen_q:
+            seen_q.add(q_norm)
+            faqs.append({
+                "question": faq.question,
+                "answer": faq.answer,
+                "category": faq.category,
+                "relevance_score": faq.relevance_score,
+            })
     payload["faqs"] = faqs
     if "audit_report" in audit_result.variance_json:
         payload["audit_report"] = audit_result.variance_json["audit_report"]

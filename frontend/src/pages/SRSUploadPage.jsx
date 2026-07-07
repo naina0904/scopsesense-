@@ -17,6 +17,9 @@ function SRSUploadPage() {
   const [fileName, setFileName] = useState("");
   const [openContainer1, setOpenContainer1] = useState(true);
   const [openContainer2, setOpenContainer2] = useState(true);
+  const [projectDevelopers, setProjectDevelopers] = useState([]);
+  const [showScopeModal, setShowScopeModal] = useState(false);
+  const [selectedScope, setSelectedScope] = useState(() => localStorage.getItem("auditScopeMode") || "full_lifecycle");
 
   useEffect(() => {
     fetchActiveSession().catch(() => {});
@@ -28,6 +31,9 @@ function SRSUploadPage() {
         .then((res) => {
           if (res && res.features) {
             setFeatures(res.features);
+            if (res.project_developers) {
+              setProjectDevelopers(res.project_developers);
+            }
           }
         })
         .catch(() => {});
@@ -47,6 +53,9 @@ function SRSUploadPage() {
       const res = await uploadSRSFile(file);
       if (res && res.features) {
         setFeatures(res.features);
+        if (res.project_developers) {
+          setProjectDevelopers(res.project_developers);
+        }
       }
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Failed to upload and parse SRS file.");
@@ -61,9 +70,14 @@ function SRSUploadPage() {
     setFeatures(updated);
   };
 
+  const isIgnoredRow = (reqName) => {
+    const norm = (reqName || "").toLowerCase().trim();
+    return ["client testing", "deployment", "external testing"].includes(norm);
+  };
+
   const isPhaseRow = (reqName, modName) => {
     const norm = (reqName || "").toLowerCase().trim();
-    return modName === "Project Phases" || ["internal testing", "client testing", "deployment"].includes(norm);
+    return modName === "Project Phases" || ["internal testing"].includes(norm);
   };
   const isSummaryHeader = (reqName) => {
     const norm = (reqName || "").toLowerCase().trim();
@@ -101,11 +115,11 @@ function SRSUploadPage() {
     setFeatures(updated);
   };
 
-  const handleSaveAndApprove = async () => {
+  const executeSaveAndNavigate = async () => {
     try {
       setSaving(true);
       setError(null);
-      const cleanedFeatures = features.map(({ dependencies, ...rest }) => rest);
+      const cleanedFeatures = features.filter(f => !isIgnoredRow(f.requirement)).map(({ dependencies, ...rest }) => rest);
       await savePlannedData(cleanedFeatures);
       setExtractionConfirmed(true);
       navigate("/configuration");
@@ -116,11 +130,19 @@ function SRSUploadPage() {
     }
   };
 
+  const handleSaveAndApprove = async () => {
+    if (!showScopeModal) {
+      setShowScopeModal(true);
+      return;
+    }
+    await executeSaveAndNavigate();
+  };
+
   useEffect(() => {
     registerStepAction({
       onNext: async () => {
         if (features.length > 0) {
-          await handleSaveAndApprove();
+          setShowScopeModal(true);
         } else {
           navigate("/configuration");
         }
@@ -192,14 +214,21 @@ function SRSUploadPage() {
         {features.length > 0 && (() => {
           const table1Items = features
             .map((item, masterIndex) => ({ ...item, masterIndex }))
-            .filter(item => !isPhaseRow(item.requirement, item.module) && !isSummaryHeader(item.requirement));
+            .filter(item => !isPhaseRow(item.requirement, item.module) && !isSummaryHeader(item.requirement) && !isIgnoredRow(item.requirement));
 
           const table2Items = features
             .map((item, masterIndex) => ({ ...item, masterIndex }))
-            .filter(item => isPhaseRow(item.requirement, item.module));
+            .filter(item => isPhaseRow(item.requirement, item.module) && !isIgnoredRow(item.requirement));
 
           const table1TotalHours = table1Items.reduce((acc, curr) => acc + (parseFloat(curr.planned_hours) || 0), 0);
           const table2TotalHours = table2Items.reduce((acc, curr) => acc + (parseFloat(curr.planned_hours) || 0), 0);
+          const uniqueDevelopers = Array.from(new Set([
+            "S1 (Junior Developer)",
+            "S2 (Mid-Level Developer)",
+            "S3 (Senior Developer)",
+            ...projectDevelopers,
+            ...features.map(f => f.assigned_developer).filter(d => d && d !== "Unassigned")
+          ]));
 
           return (
             <div className="mt-10 space-y-8">
@@ -260,12 +289,16 @@ function SRSUploadPage() {
                             />
                           </div>
                           <div className="col-span-2">
-                            <input
-                              type="text"
-                              value={feature.assigned_developer || ""}
+                            <select
+                              value={feature.assigned_developer || "Unassigned"}
                               onChange={(e) => handleFieldChange(feature.masterIndex, "assigned_developer", e.target.value)}
                               className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
+                            >
+                              <option value="Unassigned">Unassigned</option>
+                              {uniqueDevelopers.map((dev, idx) => (
+                                <option key={idx} value={dev}>{dev}</option>
+                              ))}
+                            </select>
                           </div>
                           <div className="col-span-2">
                             <select
@@ -349,12 +382,16 @@ function SRSUploadPage() {
                             />
                           </div>
                           <div className="col-span-4">
-                            <input
-                              type="text"
-                              value={phase.assigned_developer || ""}
+                            <select
+                              value={phase.assigned_developer || "Unassigned"}
                               onChange={(e) => handleFieldChange(phase.masterIndex, "assigned_developer", e.target.value)}
                               className="bg-card border border-hairline rounded px-3 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
+                            >
+                              <option value="Unassigned">Unassigned</option>
+                              {uniqueDevelopers.map((dev, idx) => (
+                                <option key={idx} value={dev}>{dev}</option>
+                              ))}
+                            </select>
                           </div>
                           <div className="col-span-2">
                             <input
@@ -382,6 +419,98 @@ function SRSUploadPage() {
             </div>
           );
         })()}
+
+        {showScopeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4">
+            <div className="bg-card border border-hairline rounded-3xl p-8 max-w-xl w-full shadow-2xl space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                  <Sparkles className="size-4" /> Audit Scope Configuration
+                </div>
+                <button onClick={() => setShowScopeModal(false)} className="text-subtext hover:text-ink text-lg font-bold">&times;</button>
+              </div>
+              <div>
+                <h3 className="font-display text-2xl text-ink">Choose Your Audit Evaluation Scope</h3>
+                <p className="text-sm text-subtext mt-2">
+                  Before initiating the audit, choose whether AI analysis and schedule calculations should evaluate Core Design & Development alone or the Full Lifecycle including Internal Testing.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 pt-2">
+                <div 
+                  onClick={() => setSelectedScope("core_dev")}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-4 ${
+                    selectedScope === "core_dev" 
+                      ? "border-primary bg-primary/5 shadow-md" 
+                      : "border-hairline hover:border-subtext bg-card"
+                  }`}
+                >
+                  <div className={`mt-0.5 size-5 rounded-full border flex items-center justify-center shrink-0 ${
+                    selectedScope === "core_dev" ? "border-primary bg-primary text-background" : "border-subtext"
+                  }`}>
+                    {selectedScope === "core_dev" && <div className="size-2 rounded-full bg-background" />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-display font-bold text-base text-ink">Core Design & Development Only</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-ink/10 text-ink font-mono text-xs font-semibold">
+                        {features.filter(f => !isPhaseRow(f.requirement, f.module) && !isIgnoredRow(f.requirement)).reduce((s,f) => s+(parseFloat(f.planned_hours)||0),0).toFixed(1)} hrs
+                      </span>
+                    </div>
+                    <p className="text-xs text-subtext mt-1">
+                      Evaluates strictly coding features. Internal Testing hours are hidden from baseline variance and delay math so QA tasks don't skew developer velocity.
+                    </p>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => setSelectedScope("full_lifecycle")}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-4 ${
+                    selectedScope === "full_lifecycle" 
+                      ? "border-primary bg-primary/5 shadow-md" 
+                      : "border-hairline hover:border-subtext bg-card"
+                  }`}
+                >
+                  <div className={`mt-0.5 size-5 rounded-full border flex items-center justify-center shrink-0 ${
+                    selectedScope === "full_lifecycle" ? "border-primary bg-primary text-background" : "border-subtext"
+                  }`}>
+                    {selectedScope === "full_lifecycle" && <div className="size-2 rounded-full bg-background" />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-display font-bold text-base text-ink">Full Lifecycle (Design & Dev + Testing)</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-xs font-semibold">
+                        {features.filter(f => !isIgnoredRow(f.requirement)).reduce((s,f) => s+(parseFloat(f.planned_hours)||0),0).toFixed(1)} hrs
+                      </span>
+                    </div>
+                    <p className="text-xs text-subtext mt-1">
+                      Evaluates both engineering feature coding and internal QA verification against the complete project baseline.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-hairline">
+                <button
+                  onClick={() => setShowScopeModal(false)}
+                  className="px-5 py-2.5 rounded-full text-xs font-semibold text-subtext hover:text-ink transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    localStorage.setItem("auditScopeMode", selectedScope);
+                    setShowScopeModal(false);
+                    await executeSaveAndNavigate();
+                  }}
+                  disabled={saving}
+                  className="px-6 py-2.5 rounded-full bg-primary text-background text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center gap-2"
+                >
+                  {saving ? "Saving..." : "Confirm Scope & Continue"}
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </PageBody>
     </>
   );

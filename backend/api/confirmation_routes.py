@@ -725,6 +725,9 @@ def get_normalization_data(session_id: int, db: Session = Depends(get_db), user 
     if not session_obj:
         raise HTTPException(status_code=404, detail="Audit session not found")
     
+    if session_obj.normalized_data_json and len(session_obj.normalized_data_json) > 0:
+        return {"normalization_data": session_obj.normalized_data_json}
+    
     # Check if matches exist, generate them if not
     matches = db.query(ModuleMatchORM).filter(ModuleMatchORM.audit_session_id == session_id).all()
     if not matches:
