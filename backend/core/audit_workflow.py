@@ -1534,7 +1534,9 @@ class AuditWorkflow:
 
                 dependencies,
 
-                architecture_scores
+                architecture_scores,
+
+                optional_results.get("semantic_matches")
             )
 
             findings[

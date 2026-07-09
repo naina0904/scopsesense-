@@ -98,7 +98,6 @@ function NormalizationPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Step 6 · Audit workflow"
         title="Merged Normalization Dataset."
         lede="Review the consolidated planned requirements and actual development hours before committing to calculations."
         primary={normData.length > 0 && !loadingNorm && !sessionLoading ? { label: saving ? "Saving..." : "Save & Confirm Dataset", onClick: handleSaveAndApprove } : undefined}

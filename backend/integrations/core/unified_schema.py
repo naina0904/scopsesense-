@@ -260,19 +260,60 @@ class PlatformData:
             hydrated = []
             for item in self.features:
                 if isinstance(item, dict):
-                    for date_field in ["created_date", "due_date", "completed_date"]:
-                        if date_field in item and item[date_field]:
-                            item[date_field] = parse_dt(item[date_field])
-                    if "status" in item:
-                        st = item["status"]
-                        if isinstance(st, dict):
-                            st = st.get("value")
-                        if isinstance(st, str):
-                            try:
-                                item["status"] = FeatureStatus(st)
-                            except ValueError:
-                                item["status"] = FeatureStatus.TODO
-                    hydrated.append(Feature(**item))
+                    f_id = str(item.get("id") or item.get("key") or item.get("name") or item.get("requirement") or "UNKNOWN")
+                    f_name = str(item.get("name") or item.get("title") or item.get("requirement") or f_id)
+                    st = item.get("status", FeatureStatus.TODO)
+                    if isinstance(st, dict):
+                        st = st.get("value")
+                    if isinstance(st, str):
+                        st_norm = st.lower().strip().replace(" ", "_")
+                        try:
+                            st = FeatureStatus(st_norm)
+                        except ValueError:
+                            if st_norm in ("completed", "closed", "resolved", "done"):
+                                st = FeatureStatus.DONE
+                            elif st_norm in ("in_progress", "active", "doing"):
+                                st = FeatureStatus.IN_PROGRESS
+                            elif st_norm in ("blocked", "impeded"):
+                                st = FeatureStatus.BLOCKED
+                            elif st_norm in ("in_review", "review"):
+                                st = FeatureStatus.IN_REVIEW
+                            else:
+                                st = FeatureStatus.TODO
+                    
+                    assigned = item.get("assigned_to") or item.get("assigned_developer") or item.get("developer")
+                    if not assigned and isinstance(item.get("devs"), list) and item.get("devs"):
+                        assigned = str(item["devs"][0])
+                        
+                    est_hours = item.get("estimated_hours")
+                    if est_hours is None and item.get("planned_hours") is not None:
+                        try:
+                            est_hours = float(item.get("planned_hours"))
+                        except (ValueError, TypeError):
+                            est_hours = None
+                            
+                    act_hours = item.get("actual_hours")
+                    if act_hours is not None:
+                        try:
+                            act_hours = float(act_hours)
+                        except (ValueError, TypeError):
+                            act_hours = None
+
+                    hydrated.append(Feature(
+                        id=f_id,
+                        name=f_name,
+                        description=str(item.get("description", "")),
+                        status=st,
+                        assigned_to=str(assigned) if assigned else None,
+                        created_date=parse_dt(item.get("created_date")),
+                        due_date=parse_dt(item.get("due_date")),
+                        completed_date=parse_dt(item.get("completed_date")),
+                        estimated_hours=est_hours,
+                        actual_hours=act_hours,
+                        parent_id=str(item.get("parent_id") or item.get("module")) if (item.get("parent_id") or item.get("module")) else None,
+                        priority=str(item.get("priority")) if item.get("priority") else None,
+                        platform_specific=item.get("platform_specific", item)
+                    ))
                 else:
                     hydrated.append(item)
             self.features = hydrated
@@ -281,7 +322,20 @@ class PlatformData:
             hydrated = []
             for item in self.contributors:
                 if isinstance(item, dict):
-                    hydrated.append(Contributor(**item))
+                    c_id = str(item.get("id") or item.get("email") or item.get("name") or "UNKNOWN")
+                    c_name = str(item.get("name") or item.get("id") or c_id)
+                    commits = 0
+                    try:
+                        commits = int(item.get("commits_count") or item.get("total_commits") or 0)
+                    except (ValueError, TypeError):
+                        pass
+                    hydrated.append(Contributor(
+                        id=c_id,
+                        name=c_name,
+                        email=str(item.get("email")) if item.get("email") else None,
+                        commits_count=commits,
+                        platform_specific=item.get("platform_specific", item)
+                    ))
                 else:
                     hydrated.append(item)
             self.contributors = hydrated
@@ -325,7 +379,14 @@ class PlatformData:
 
     def get_features_by_contributor(self, contributor_id: str) -> List[Feature]:
         """Return all features assigned to the given contributor."""
-        return [f for f in self.features if f.assigned_to == contributor_id]
+        contrib_names = {contributor_id}
+        for c in self.contributors:
+            if c.id == contributor_id or c.name == contributor_id or getattr(c, "email", None) == contributor_id:
+                contrib_names.add(c.id)
+                contrib_names.add(c.name)
+                if getattr(c, "email", None):
+                    contrib_names.add(c.email)
+        return [f for f in self.features if f.assigned_to in contrib_names]
 
     def get_events_for_feature(self, feature_id: str) -> List[TimelineEvent]:
         """Return all timeline events for a given feature."""

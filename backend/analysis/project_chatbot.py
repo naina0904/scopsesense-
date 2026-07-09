@@ -30,8 +30,75 @@ class AnalysisContextualizer:
         faqs: Optional[List[Any]] = None,
         srs_features: Optional[List[Any]] = None
     ):
-        self.platform_data = platform_data
-        self.analysis_result = analysis_result
+        if isinstance(platform_data, dict):
+            from backend.integrations.core.unified_schema import PlatformData, PlatformType
+            p_type = platform_data.get("platform", "jira")
+            p_key = platform_data.get("platform_key", platform_data.get("project_key", "Project"))
+            try:
+                pt_enum = PlatformType(p_type)
+            except ValueError:
+                pt_enum = PlatformType.JIRA
+            self.platform_data = PlatformData(
+                platform=pt_enum,
+                platform_key=str(p_key),
+                features=platform_data.get("features", []),
+                contributors=platform_data.get("contributors", []),
+                timeline_events=platform_data.get("timeline_events", []),
+                sprints=platform_data.get("sprints", [])
+            )
+        else:
+            self.platform_data = platform_data
+
+        if isinstance(analysis_result, dict):
+            from backend.analysis.semantic_delay_analyzer import DelayAnalysisResult, DelayEvidence, DelayCategory
+            ev_list = []
+            for ev in analysis_result.get("evidence", []):
+                if isinstance(ev, dict):
+                    cat_str = ev.get("category", "unassigned_features")
+                    try:
+                        cat = DelayCategory(cat_str)
+                    except ValueError:
+                        cat = DelayCategory.UNASSIGNED_FEATURES
+                    ev_list.append(DelayEvidence(
+                        category=cat,
+                        severity=float(ev.get("severity", 0.0)),
+                        description=ev.get("description", "")
+                    ))
+                elif isinstance(ev, DelayEvidence):
+                    ev_list.append(ev)
+            if not ev_list:
+                for rc in analysis_result.get("root_cause_table", []):
+                    cat_name = rc.get("category", "Variance")
+                    desc = rc.get("reason", "") or rc.get("evidence", "") or f"Issue in {cat_name}"
+                    ev_list.append(DelayEvidence(
+                        category=DelayCategory.UNASSIGNED_FEATURES,
+                        severity=0.5,
+                        description=f"[{cat_name}] {desc}"
+                    ))
+            ts = analysis_result.get("analysis_timestamp")
+            if isinstance(ts, str):
+                try:
+                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except ValueError:
+                    ts = datetime.utcnow()
+            elif not isinstance(ts, datetime):
+                ts = datetime.utcnow()
+            self.analysis_result = DelayAnalysisResult(
+                project_key=str(analysis_result.get("project_key", "Project")),
+                platform=str(analysis_result.get("platform", "jira")),
+                analysis_timestamp=ts,
+                total_features=int(analysis_result.get("total_features", 0)),
+                completed_features=int(analysis_result.get("completed_features", 0)),
+                in_progress_features=int(analysis_result.get("in_progress_features", 0)),
+                blocked_features=int(analysis_result.get("blocked_features", 0)),
+                unassigned_features=int(analysis_result.get("unassigned_features", 0)),
+                evidence=ev_list,
+                severity_score=float(analysis_result.get("severity_score", 0.0) or (1.0 - (float(analysis_result.get("health_score", 100)) / 100.0))),
+                primary_causes=analysis_result.get("primary_causes", [])
+            )
+        else:
+            self.analysis_result = analysis_result
+
         self.faqs = faqs or []
         self.srs_features = srs_features or []
         if provider:
@@ -77,7 +144,7 @@ PRIMARY DELAY FACTORS
             features = self.platform_data.get_features_by_contributor(contrib.id)
             summary += f"• {contrib.name}: {len(features)} features, {contrib.commits_count} commits\n"
         
-        summary += "\nFEATURE STATUS BREAKDOWN\n=======================\n"
+        summary += "\nFEATURE STATUS BREAKDOWN & DETAILS\n==================================\n"
         status_counts = {}
         for feature in self.platform_data.features:
             status = feature.status.value
@@ -85,6 +152,14 @@ PRIMARY DELAY FACTORS
         
         for status, count in sorted(status_counts.items()):
             summary += f"• {status.replace('_', ' ').title()}: {count}\n"
+            
+        summary += "\nIndividual Feature Details:\n"
+        for feature in self.platform_data.features[:50]:
+            st_str = feature.status.value.replace('_', ' ').title()
+            assignee = feature.assigned_to or "Unassigned"
+            planned = feature.estimated_hours if feature.estimated_hours is not None else 0
+            actual = feature.actual_hours if feature.actual_hours is not None else 0
+            summary += f"• [{feature.id}] {feature.name} (Status: {st_str}, Assigned: {assignee}, Planned: {planned}h, Actual: {actual}h)\n"
         
         # Add ownership transfer summary
         ownership_features = []
@@ -112,10 +187,10 @@ PRIMARY DELAY FACTORS
             summary += "\nSRS REQUIREMENTS & FINDINGS\n===========================\n"
             for feature in self.srs_features:
                 if isinstance(feature, dict):
-                    name = feature.get("name", "Unknown")
+                    name = feature.get("name") or feature.get("title") or feature.get("requirement") or "Unknown"
                     desc = feature.get("description", "")
-                    due = feature.get("due_date", "")
-                    summary += f"• SRS Feature: {name}\n  Description: {desc}\n  Due Date: {due}\n"
+                    due = feature.get("due_date") or feature.get("priority", "")
+                    summary += f"• SRS Feature: {name}\n  Description: {desc}\n  Info: {due}\n"
 
         return summary
     

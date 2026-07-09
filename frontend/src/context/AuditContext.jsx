@@ -37,6 +37,11 @@ export const AuditProvider = ({ children }) => {
   const [taskId, setTaskId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
 
+  // UI toggle states for sidebar and modals
+  const [showFaqs, setShowFaqs] = useState(false);
+  const [showCopilot, setShowCopilot] = useState(false);
+  const [showDeveloperPerformance, setShowDeveloperPerformance] = useState(false);
+
   const pollRef = useRef(null);
   const stepActionRef = useRef({ onNext: null, onPrev: null });
 
@@ -400,6 +405,12 @@ export const AuditProvider = ({ children }) => {
     sessionId,
     stepActionRef,
     registerStepAction,
+    showFaqs,
+    setShowFaqs,
+    showCopilot,
+    setShowCopilot,
+    showDeveloperPerformance,
+    setShowDeveloperPerformance,
   };
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useProject } from "../context/ProjectContext";
 import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Database, Plus, RefreshCw, Plug, Trash2, ArrowUpRight, Check, Save, ArrowLeft, ArrowRight } from "lucide-react";
+import { CheckCircle, Database, Plus, RefreshCw, Plug, Trash2, ArrowUpRight, Check, Save, ArrowLeft, ArrowRight, ListTodo, X } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 import api from "../api/client";
 
@@ -19,6 +19,7 @@ function ProjectSetupPage() {
   const [hasFetched, setHasFetched] = useState(false);
   const [savingActual, setSavingActual] = useState(false);
   const [forceFullSync, setForceFullSync] = useState(false);
+  const [showTasksModal, setShowTasksModal] = useState(false);
 
   const [connections, setConnections] = useState([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState(null);
@@ -101,6 +102,7 @@ function ProjectSetupPage() {
       if (res && res.features) {
         setActualFeatures(res.features);
         setHasFetched(true);
+        setShowTasksModal(true);
       }
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Failed to fetch platform data. Please check your credentials.");
@@ -212,9 +214,7 @@ function ProjectSetupPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Steps 3, 4 & 5 · Audit workflow"
-        title="Connect Platform & Confirm Capacity."
-        lede="Connect to Jira or GitHub to fetch actual work items, and customize developer working capacity."
+        title="Connect Platform."
         primary={actualFeatures.length > 0 ? { label: savingActual ? "Saving..." : "Approve Data & Continue", onClick: handleSaveAndApprove } : undefined}
       />
       <PageBody>
@@ -228,7 +228,7 @@ function ProjectSetupPage() {
         {auditSession?.actual_data_approved && auditSession?.capacity_approved && (
           <div className="flex items-center gap-2 bg-pista/30 border border-pista text-ink px-4 py-3 rounded-xl text-sm font-semibold">
             <CheckCircle size={18} />
-            <span>Platform & Capacity Approved</span>
+            <span>Platform Data Approved</span>
           </div>
         )}
 
@@ -313,131 +313,26 @@ function ProjectSetupPage() {
         </div>
 
         {actualFeatures.length > 0 ? (
-          <div className="mt-10 soft-card overflow-hidden">
-            <div className="flex justify-between items-center px-6 py-5 border-b border-hairline">
-              <div>
-                <h3 className="font-display text-2xl">Table 2: Actual Platform Tasks</h3>
-                <p className="text-subtext text-sm">Inspect and override the tasks fetched from {connections.length > 0 ? (connections[0].platform === "jira" ? "Jira" : "GitHub") : "the platform"}.</p>
+          <div className="mt-8 soft-card p-6 bg-pista/20 border border-pista flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="size-12 rounded-xl bg-pista/40 border border-pista flex items-center justify-center text-ink font-bold">
+                <ListTodo className="size-6" />
               </div>
+              <div>
+                <h3 className="font-display text-xl text-ink">Platform Tasks Synchronized</h3>
+                <p className="text-subtext text-sm">
+                  {actualFeatures.length} work items fetched &bull; {actualFeatures.reduce((acc, f) => acc + (parseFloat(f.actual_hours) || 0), 0)} total logged hours
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               <button
-                onClick={addActualRow}
-                className="h-10 px-4 rounded-full border border-hairline bg-card text-sm hover:bg-secondary transition flex items-center gap-2"
+                onClick={() => setShowTasksModal(true)}
+                className="h-10 px-5 rounded-full bg-ink text-background text-sm font-medium inline-flex items-center gap-2 hover:opacity-90 transition"
               >
-                <Plus size={16} /> Add Task
+                View & Edit Platform Tasks &rarr;
               </button>
             </div>
-
-            <div className="overflow-x-auto">
-              <div className="min-w-[1400px]">
-                <div className="grid grid-cols-[2fr_2.5fr_1fr_1fr_1.5fr_1fr_1fr_1fr_1fr_0.8fr_40px] gap-2 px-6 py-3 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline items-center">
-                  <div>Module / Epic</div>
-                  <div>Actual Feature</div>
-                  <div>Type</div>
-                  <div>Status</div>
-                  <div>Assignee</div>
-                  <div>Priority</div>
-                  <div>Created</div>
-                  <div>Completed</div>
-                  <div className="text-center">Story Pts</div>
-                  <div className="text-center">Hours</div>
-                  <div className="text-right">Act</div>
-                </div>
-                
-                <div className="divide-y divide-hairline">
-                  {actualFeatures.map((item, index) => (
-                    <div key={index} className="grid grid-cols-[2fr_2.5fr_1fr_1fr_1.5fr_1fr_1fr_1fr_1fr_0.8fr_40px] px-6 py-3 items-center hover:bg-secondary/50 transition gap-2">
-                      <div>
-                         <input
-                          type="text"
-                          value={item.module || ""}
-                          onChange={(e) => handleFieldChange(index, "module", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          value={item.requirement || item.name || ""}
-                          onChange={(e) => handleFieldChange(index, "requirement", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div>
-                        <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full text-center truncate">
-                          {item.issue_type || "Task"}
-                        </div>
-                      </div>
-                      <div>
-                        <select
-                          value={item.status || "Todo"}
-                          onChange={(e) => handleFieldChange(index, "status", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        >
-                          <option value="Todo">Todo</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="In Review">In Review</option>
-                          <option value="Done">Done</option>
-                          <option value="Blocked">Blocked</option>
-                        </select>
-                      </div>
-                      <div>
-                         <input
-                          type="text"
-                          value={item.assigned_developer || ""}
-                          onChange={(e) => handleFieldChange(index, "assigned_developer", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div>
-                        <select
-                          value={item.priority || "Medium"}
-                          onChange={(e) => handleFieldChange(index, "priority", e.target.value)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                          <option value="Critical">Critical</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full truncate">
-                          {item.created_date ? new Date(item.created_date).toLocaleDateString() : "-"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full truncate">
-                          {item.completed_date ? new Date(item.completed_date).toLocaleDateString() : "-"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full text-center truncate">
-                          {item.story_points ?? "-"}
-                        </div>
-                      </div>
-                      <div>
-                         <input
-                          type="number"
-                          step="0.5"
-                          value={item.actual_hours || 0}
-                          onChange={(e) => handleFieldChange(index, "actual_hours", parseFloat(e.target.value) || 0)}
-                          className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full text-center focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => deleteActualRow(index)}
-                          className="text-risk hover:text-red-700 p-1.5 rounded-lg hover:bg-rose/30 transition"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
           </div>
         ) : hasFetched ? (
           <div className="soft-card p-10 text-center mt-10">
@@ -445,6 +340,174 @@ function ProjectSetupPage() {
             <p className="text-subtext mt-2">We successfully connected to your project, but found 0 tasks. Please check if your project is empty or try a different project key.</p>
           </div>
         ) : null}
+
+        {showTasksModal && actualFeatures.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-ink/60 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-card border border-hairline rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="flex justify-between items-center px-6 py-5 border-b border-hairline bg-card/80 sticky top-0 z-10 backdrop-blur-md">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2 inline-block">
+                    Live Sync Workspace
+                  </span>
+                  <h3 className="font-display text-2xl text-ink">Table 2: Actual Platform Tasks</h3>
+                  <p className="text-subtext text-sm">Inspect and override the tasks fetched from {connections.length > 0 ? (connections[0].platform === "jira" ? "Jira" : "GitHub") : "the platform"}.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={addActualRow}
+                    className="h-10 px-4 rounded-full border border-hairline bg-secondary text-ink text-sm hover:bg-secondary/80 transition flex items-center gap-2 font-medium"
+                  >
+                    <Plus size={16} /> Add Task
+                  </button>
+                  <button
+                    onClick={() => setShowTasksModal(false)}
+                    className="size-10 rounded-full bg-secondary text-ink hover:bg-secondary/80 transition flex items-center justify-center"
+                    title="Close Modal"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1 p-6">
+                <div className="overflow-x-auto border border-hairline rounded-xl">
+                  <div className="min-w-[1400px]">
+                    <div className="grid grid-cols-[2fr_2.5fr_1fr_1fr_1.5fr_1fr_1fr_1fr_1fr_0.8fr_40px] gap-2 px-6 py-3 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline items-center font-semibold">
+                      <div>Module / Epic</div>
+                      <div>Actual Feature</div>
+                      <div>Type</div>
+                      <div>Status</div>
+                      <div>Assignee</div>
+                      <div>Priority</div>
+                      <div>Created</div>
+                      <div>Completed</div>
+                      <div className="text-center">Story Pts</div>
+                      <div className="text-center">Hours</div>
+                      <div className="text-right">Act</div>
+                    </div>
+                    
+                    <div className="divide-y divide-hairline bg-card">
+                      {actualFeatures.map((item, index) => (
+                        <div key={index} className="grid grid-cols-[2fr_2.5fr_1fr_1fr_1.5fr_1fr_1fr_1fr_1fr_0.8fr_40px] px-6 py-3 items-center hover:bg-secondary/50 transition gap-2">
+                          <div>
+                             <input
+                              type="text"
+                              value={item.module || ""}
+                              onChange={(e) => handleFieldChange(index, "module", e.target.value)}
+                              className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              value={item.requirement || item.name || ""}
+                              onChange={(e) => handleFieldChange(index, "requirement", e.target.value)}
+                              className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+                          <div>
+                            <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full text-center truncate">
+                              {item.issue_type || "Task"}
+                            </div>
+                          </div>
+                          <div>
+                            <select
+                              value={item.status || "Todo"}
+                              onChange={(e) => handleFieldChange(index, "status", e.target.value)}
+                              className="bg-card border border-hairline rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring truncate cursor-pointer shadow-2xs"
+                            >
+                              <option value="Todo">Todo</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="In Review">In Review</option>
+                              <option value="Done">Done</option>
+                              <option value="Blocked">Blocked</option>
+                            </select>
+                          </div>
+                          <div>
+                             <input
+                              type="text"
+                              value={item.assigned_developer || ""}
+                              onChange={(e) => handleFieldChange(index, "assigned_developer", e.target.value)}
+                              className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+                          <div>
+                            <select
+                              value={item.priority || "Medium"}
+                              onChange={(e) => handleFieldChange(index, "priority", e.target.value)}
+                              className="bg-card border border-hairline rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-ring truncate cursor-pointer shadow-2xs"
+                            >
+                              <option value="Low">Low</option>
+                              <option value="Medium">Medium</option>
+                              <option value="High">High</option>
+                              <option value="Critical">Critical</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full truncate">
+                              {item.created_date ? new Date(item.created_date).toLocaleDateString() : "-"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full truncate">
+                              {item.completed_date ? new Date(item.completed_date).toLocaleDateString() : "-"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-subtext w-full text-center truncate">
+                              {item.story_points ?? "-"}
+                            </div>
+                          </div>
+                          <div>
+                             <input
+                              type="number"
+                              step="0.5"
+                              value={item.actual_hours || 0}
+                              onChange={(e) => handleFieldChange(index, "actual_hours", parseFloat(e.target.value) || 0)}
+                              className="bg-card border border-hairline rounded-lg px-2 py-1.5 text-xs text-ink w-full text-center focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => deleteActualRow(index)}
+                              className="text-risk hover:text-red-700 p-1.5 rounded-lg hover:bg-rose/30 transition"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-6 py-4 border-t border-hairline bg-card/80 sticky bottom-0 z-10 backdrop-blur-md">
+                <div className="text-sm text-subtext">
+                  Showing <strong className="text-ink">{actualFeatures.length}</strong> work items &bull; Total Logged Hours: <strong className="text-ink">{actualFeatures.reduce((acc, f) => acc + (parseFloat(f.actual_hours) || 0), 0)} hrs</strong>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowTasksModal(false)}
+                    className="h-10 px-5 rounded-full border border-hairline bg-card text-ink text-sm font-medium hover:bg-secondary transition"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await handleSaveAndApprove();
+                      setShowTasksModal(false);
+                    }}
+                    disabled={savingActual}
+                    className="h-10 px-6 rounded-full bg-ink text-background text-sm font-medium inline-flex items-center gap-2 hover:opacity-90 transition disabled:opacity-50"
+                  >
+                    {savingActual ? "Saving..." : "Confirm & continue →"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </PageBody>
     </>
   );

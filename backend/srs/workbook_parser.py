@@ -180,14 +180,14 @@ class WorkbookParser:
                             
                         # Structural Global Phase Check
                         has_sl = sl_col and pd.notna(row[sl_col]) and str(row[sl_col]).strip().lower() not in ["nan", "none", ""]
-                        if norm_feat in ["internal testing", "client testing", "deployment"] or (not has_explicit_module and not has_sl):
+                        if any(k in norm_feat for k in ["internal testing", "client testing", "deployment", "testing", "qa"]) or (not has_explicit_module and not has_sl):
                             module_val = "Project Phases"
                         else:
                             module_val = current_module
                             
                         # Use dynamic calculation for lifecycle phases only if uncalculated in SRS
                         if hours_val == 0.0 and total_accumulated_hours > 0:
-                            if "internal testing" in norm_feat:
+                            if any(k in norm_feat for k in ["internal testing", "testing", "qa"]):
                                 hours_val = round(total_accumulated_hours * 0.2, 1)
                             elif "client testing" in norm_feat or "deployment" in norm_feat:
                                 hours_val = round(total_accumulated_hours * 0.1, 1)

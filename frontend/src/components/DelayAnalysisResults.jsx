@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAudit } from "../context/AuditContext";
 import { askDelayAnalysisChat } from "../api/chat";
-import { X, Send, AlertTriangle, RefreshCw, Sparkles, HelpCircle, User, Bot, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Send, AlertTriangle, RefreshCw, Sparkles, HelpCircle, User, Bot, ChevronDown, ChevronUp, Users, Layers } from "lucide-react";
 import toast from "react-hot-toast";
+import TemporalDriftChart from "./TemporalDriftChart";
 
-function DelayAnalysisResults({ results }) {
-  const { fetchRowIntelligence } = useAudit();
+function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
+  const { fetchRowIntelligence, showDeveloperPerformance, setShowDeveloperPerformance } = useAudit();
+  
+  const [localDevModal, setLocalDevModal] = useState(false);
+  const isDevModalOpen = showDeveloperPerformance !== undefined ? showDeveloperPerformance : localDevModal;
+  const setIsDevModalOpen = setShowDeveloperPerformance || setLocalDevModal;
+  const [isVarianceModalOpen, setIsVarianceModalOpen] = useState(false);
   
   // Drawer state
   const [selectedRow, setSelectedRow] = useState(null);
@@ -24,26 +30,28 @@ function DelayAnalysisResults({ results }) {
   const rawVarianceRows = tableItems(results.variance_table);
   const developerRows = tableItems(results.developer_table);
 
-  const isTestingRow = (row) => {
-    const mod = (row?.module || "").toLowerCase().trim();
-    const req = (row?.requirement || "").toLowerCase().trim();
-    return mod === "project phases" || req.includes("internal testing");
+  const isPhaseRow = (reqName, modName) => {
+    const norm = (reqName || "").toLowerCase().trim();
+    return modName === "Project Phases" || ["internal testing", "client testing", "deployment", "testing", "qa"].some(p => norm.includes(p));
   };
 
-  const isIgnoredRow = (row) => {
-    const req = (row?.requirement || "").toLowerCase().trim();
-    return ["client testing", "deployment", "external testing"].includes(req);
-  };
-
-  const cleanedVarianceRows = rawVarianceRows.filter(r => !isIgnoredRow(r));
-  const varianceRows = cleanedVarianceRows.filter(r => auditScopeMode === "core_dev" ? !isTestingRow(r) : true);
+  const varianceRows = useMemo(() => {
+    if (auditScopeMode === "full_lifecycle") return rawVarianceRows;
+    return rawVarianceRows.filter(r => !isPhaseRow(r.requirement, r.module));
+  }, [rawVarianceRows, auditScopeMode]);
 
   const activePlannedHours = varianceRows.reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
   const activeActualHours = varianceRows.reduce((sum, r) => sum + (Number(r.actual_hours) || 0), 0);
   const activeVariance = activeActualHours - activePlannedHours;
+  const activeRemainingHours = varianceRows.reduce((sum, r) => {
+    const planned = Number(r.planned_hours || 0);
+    const actual = Number(r.actual_hours || 0);
+    const isDone = String(r.status || "").toLowerCase() in { done: 1, completed: 1, closed: 1, resolved: 1 };
+    return sum + (isDone ? 0 : Math.max(0, planned - actual));
+  }, 0);
 
-  const corePlannedHours = cleanedVarianceRows.filter(r => !isTestingRow(r)).reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
-  const fullPlannedHours = cleanedVarianceRows.reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
+  const unmappedBaselineRows = varianceRows.filter(r => (Number(r.planned_hours) > 0) && (Number(r.actual_hours) === 0));
+  const unmappedBaselineHours = unmappedBaselineRows.reduce((sum, r) => sum + (Number(r.planned_hours) || 0), 0);
 
   const handleRowClick = async (row) => {
     setSelectedRow(row);
@@ -105,53 +113,107 @@ function DelayAnalysisResults({ results }) {
   return (
     <div className="space-y-8 relative pb-20">
       
-      <section className="lift-card p-10 grain">
-         <div className="flex items-center gap-2 text-xs text-subtext"><Sparkles className="size-3.5" /> Executive summary</div>
-         <h2 className="mt-3 font-display text-4xl leading-tight max-w-3xl">
-           Audit for <em className="not-italic text-ink font-medium">{results.project_key}</em> completed on <em className="not-italic text-ink font-medium">
-             {results.analysis_timestamp 
-                ? new Date(results.analysis_timestamp.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) 
-                : "recently"}
-           </em>.
+      <section className="lift-card p-8 md:p-10 grain">
+         <div className="flex flex-wrap items-center justify-between gap-4">
+           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+             <Sparkles className="size-3.5" /> Executive Forensic Summary
+           </div>
+           <div className="flex items-center gap-2 text-xs font-medium text-subtext bg-card px-3 py-1.5 rounded-full border border-hairline shadow-sm">
+             <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+             <span>Completed on: <strong className="text-ink font-semibold">
+               {results.analysis_timestamp 
+                 ? new Date(results.analysis_timestamp.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+                 : "Just now"}
+             </strong></span>
+           </div>
+         </div>
+         <h2 className="mt-4 font-display text-3xl md:text-4xl font-bold text-ink tracking-tight">
+           Project Schedule & Drift Analysis: <span className="text-primary">{results.project_key || "Repository"}</span>
          </h2>
-         <div className="mt-8 bg-card/80 backdrop-blur border border-hairline rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-           <div>
-             <div className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-               <Sparkles className="size-3.5" /> Dynamic Audit Scope Mode
-             </div>
-             <div className="text-sm font-medium text-ink mt-0.5">
-               {auditScopeMode === "full_lifecycle" 
-                 ? `Full Lifecycle Scope (${fullPlannedHours.toFixed(1)}h across ${cleanedVarianceRows.length} items)` 
-                 : `Core Engineering Scope (${corePlannedHours.toFixed(1)}h across ${cleanedVarianceRows.filter(r => !isTestingRow(r)).length} items)`}
-             </div>
-           </div>
-           <div className="flex bg-beige/40 p-1 rounded-xl border border-hairline shrink-0">
-             <button
-               onClick={() => { setAuditScopeMode("full_lifecycle"); localStorage.setItem("auditScopeMode", "full_lifecycle"); }}
-               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                 auditScopeMode === "full_lifecycle" ? "bg-ink text-background shadow" : "text-subtext hover:text-ink"
-               }`}
-             >
-               Full Lifecycle + Testing
-             </button>
-             <button
-               onClick={() => { setAuditScopeMode("core_dev"); localStorage.setItem("auditScopeMode", "core_dev"); }}
-               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                 auditScopeMode === "core_dev" ? "bg-ink text-background shadow" : "text-subtext hover:text-ink"
-               }`}
-             >
-               Design & Dev Only
-             </button>
-           </div>
-         </div>
+          <p className="mt-2 text-sm md:text-base text-subtext max-w-3xl leading-relaxed">
+            AI Forensic Audit: SRS Specs vs. Jira Actuals.
+          </p>
+          {/* Standardized Industrial Forensic Metrics Table / Grid */}
+          <div className="mt-8 border border-hairline rounded-2xl overflow-hidden bg-card shadow-sm">
+            <div className="bg-secondary/60 px-6 py-3.5 border-b border-hairline flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-ink flex items-center gap-2">
+                <span className="size-2 rounded-full bg-primary" />
+                Audit Scope & Schedule Reconciliation Table
+              </span>
+              <span className="text-[11px] font-semibold text-subtext bg-background/80 px-3 py-1 rounded-md border border-hairline shadow-2xs">
+                {auditScopeMode === "full_lifecycle" ? "Full Lifecycle (Design & Dev + Testing)" : "Design & Dev Only"}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-hairline bg-card">
+              <div className="p-5 flex flex-col justify-between">
+                <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
+                  <span>Exact Hours Planned (SRS)</span>
+                  <span className="size-2 rounded-full bg-[#3b82f6]" />
+                </div>
+                <div className="text-2xl font-display font-bold text-info mt-2">
+                  {activePlannedHours.toFixed(1)} <span className="text-xs font-semibold text-subtext font-sans">hours</span>
+                </div>
+                <div className="text-[11px] text-subtext mt-1.5 leading-snug">
+                  Budgeted baseline extracted from SRS document
+                </div>
+              </div>
 
-         <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-           <Headline tone="bg-info/40" label="SRS Roadmap Variance" value={`${auditScopeMode === "core_dev" ? activeVariance.toFixed(1) : Number(results.srs_schedule_variance ?? results.schedule_variance ?? 0).toFixed(1)}h`} sub={auditScopeMode === "core_dev" ? "Core dev baseline slip" : "Full roadmap slip"} />
-           <Headline tone="bg-rose/20" label="Ghost Scope Creep" value={`${results.ghost_hours > 0 ? '+' : ''}${Number(results.ghost_hours ?? 0).toFixed(1)}h`} sub="Unplanned / unbudgeted tasks" />
-           <Headline tone="bg-emerald/30" label="Remaining Work" value={`${varianceRows.reduce((sum, r) => sum + Math.max(0, (Number(r.planned_hours)||0) - (Number(r.actual_hours)||0)), 0).toFixed(1)}h`} sub={`Open ${auditScopeMode === "core_dev" ? "dev" : "project"} tasks`} />
-           <Headline tone="bg-beige" label="Predicted Delay" value={`${Number(results.predicted_delay ?? 0).toFixed(1)}w`} sub="Forecasted slip" />
-         </div>
-      </section>
+              <div className="p-5 flex flex-col justify-between">
+                <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
+                  <span>Hours Worked On (Jira)</span>
+                  <span className="size-2 rounded-full bg-[#10b981]" />
+                </div>
+                <div className={`text-2xl font-display font-bold mt-2 ${activeVariance > 0 ? "text-risk" : "text-emerald"}`}>
+                  {activeActualHours.toFixed(1)} <span className="text-xs font-semibold text-subtext font-sans">hours</span>
+                </div>
+                <div className="text-[11px] text-subtext mt-1.5 leading-snug">
+                  Actual timespent logged across Jira issues
+                </div>
+              </div>
+
+              <div className="p-5 flex flex-col justify-between">
+                <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
+                  <span>Remaining Workload</span>
+                  <span className="size-2 rounded-full bg-[#8b5cf6]" />
+                </div>
+                <div className="text-2xl font-display font-bold text-ink mt-2">
+                  {activeRemainingHours.toFixed(1)} <span className="text-xs font-semibold text-subtext font-sans">hours</span>
+                </div>
+                <div className="text-[11px] text-subtext mt-1.5 leading-snug">
+                  Estimated effort required to reach completion
+                </div>
+              </div>
+
+              <div className="p-5 flex flex-col justify-between">
+                <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
+                  <span>Forecasted Slip</span>
+                  <span className="size-2 rounded-full bg-amber-500" />
+                </div>
+                <div className="text-2xl font-display font-bold text-amber-600 dark:text-amber-400 mt-2">
+                  {Number(results.predicted_delay ?? 0).toFixed(1)} <span className="text-xs font-semibold text-subtext font-sans">weeks</span>
+                </div>
+                <div className="text-[11px] text-subtext mt-1.5 leading-snug">
+                  AI predicted schedule drift based on velocity
+                </div>
+              </div>
+
+              <div className="p-5 flex flex-col justify-between">
+                <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
+                  <span>Ghost Scope Creep</span>
+                  <span className="size-2 rounded-full bg-rose-500" />
+                </div>
+                <div className="text-2xl font-display font-bold text-rose-600 dark:text-rose-400 mt-2">
+                  {results.ghost_hours > 0 ? '+' : ''}{Number(results.ghost_hours ?? 0).toFixed(1)} <span className="text-xs font-semibold text-subtext font-sans">hours</span>
+                </div>
+                <div className="text-[11px] text-subtext mt-1.5 leading-snug">
+                  Unbudgeted Jira effort logged outside SRS baseline
+                </div>
+              </div>
+            </div>
+          </div>
+       </section>
+
+
 
       {results.freshness_penalty_applied && (
         <div className="bg-warning/20 border border-warning/30 rounded-3xl p-6 flex items-start gap-4 shadow-sm">
@@ -165,131 +227,269 @@ function DelayAnalysisResults({ results }) {
         </div>
       )}
 
+      <TemporalDriftChart
+        varianceRows={varianceRows}
+        faqs={faqs}
+        onScrubFaq={onScrubFaq}
+        onSelectRow={handleRowClick}
+      />
 
+      {/* Sleek Clickable Card for SRS vs Actual Variance */}
+      <div className="bg-card border border-hairline rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden transition-all duration-300">
+        <div className="absolute -top-32 -right-32 size-96 bg-info/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-32 size-96 bg-emerald/10 rounded-full blur-3xl pointer-events-none" />
 
-
-
-      <div className="soft-card overflow-hidden">
-        <div className="px-8 py-6 border-b border-hairline flex justify-between items-center">
+        <div 
+          onClick={() => setIsVarianceModalOpen(true)}
+          className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10 cursor-pointer select-none group"
+        >
           <div>
-            <h3 className="font-display text-2xl">SRS vs Actual Variance</h3>
-            <p className="text-subtext text-sm mt-1">Schedule deviation analysis mapped to requirements.</p>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <div className="min-w-[900px]">
-             <div className="grid grid-cols-12 px-8 py-3 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline items-center">
-               <div className="col-span-2">Module</div>
-               <div className="col-span-4">Requirement</div>
-               <div className="col-span-1 text-center">Planned</div>
-               <div className="col-span-1 text-center">Actual</div>
-               <div className="col-span-1 text-center">Variance</div>
-               <div className="col-span-2 text-center">Schedule Status</div>
-               <div className="col-span-1 text-right">FAQs</div>
-             </div>
-             <div className="divide-y divide-hairline">
-               {varianceRows.map((row, index) => {
-                 const statusLower = (row.status || "").toLowerCase();
-                 const isDone = statusLower === "done" || statusLower === "completed" || statusLower === "resolved";
-                 
-                 let scheduleStatus = "On Track";
-                 let statusColor = "bg-lavender/40 text-ink";
-                 
-                 if (row.variance > 0) {
-                   scheduleStatus = "Delayed";
-                   statusColor = "bg-rose/20 text-risk";
-                 } else if (row.variance < 0) {
-                   if (isDone) {
-                     scheduleStatus = "Advanced";
-                     statusColor = "bg-pista text-ink";
-                   } else if (row.actual_hours === 0) {
-                     scheduleStatus = "Pending";
-                     statusColor = "bg-slate-100 text-slate-500";
-                   } else {
-                     scheduleStatus = "On Track";
-                     statusColor = "bg-lavender/40 text-ink";
-                   }
-                 }
-                 
-                 return (
-                 <div 
-                   key={`${row.requirement}-${index}`} 
-                   onClick={() => handleRowClick(row)}
-                   className="grid grid-cols-12 px-8 py-4 items-center hover:bg-secondary/50 cursor-pointer transition group"
-                 >
-                   <div className="col-span-2 text-sm text-subtext">{row.module}</div>
-                   <div className="col-span-4 text-sm font-medium text-ink pr-4">{row.requirement}</div>
-                   <div className="col-span-1 text-center text-sm">{Number(row.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
-                   <div className="col-span-1 text-center text-sm">{Number(row.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
-                   <div className={`col-span-1 text-center text-sm font-bold ${row.variance > 0 ? "text-risk" : row.variance < 0 ? "text-success" : "text-subtext"}`}>
-                     {row.variance > 0 ? `+${Number(row.variance).toFixed(1).replace(/\.0$/, '')}` : Number(row.variance || 0).toFixed(1).replace(/\.0$/, '')}h
-                   </div>
-                   <div className="col-span-2 flex justify-center">
-                     <span className={`px-3 py-1 text-xs font-medium rounded-full min-w-[85px] text-center inline-block ${statusColor}`}>
-                       {scheduleStatus}
-                     </span>
-                   </div>
-                   <div className="col-span-1 flex justify-end">
-                     <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-ink/0 group-hover:text-ink/40 transition-colors">
-                       <Sparkles size={12} /> AI Insights
-                     </span>
-                   </div>
-                 </div>
-               )})}
-               {!varianceRows.length && <div className="p-8 text-center text-subtext">No variance rows available.</div>}
-             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="soft-card overflow-hidden">
-        <div className="px-8 py-6 border-b border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-beige/10">
-          <div>
-            <h3 className="font-display text-2xl">Developer Performance</h3>
-            <p className="text-xs text-subtext mt-1 max-w-xl">
-              💡 <strong className="text-ink">Reconciliation Note:</strong> Developer Actuals & Variance include both Planned SRS tasks and Unbudgeted Ghost Work ({results.ghost_hours > 0 ? `+${Number(results.ghost_hours).toFixed(1)}h ghost scope creep across team` : '0h ghost work'}).
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="font-display text-2xl md:text-3xl text-ink tracking-tight flex items-center gap-2.5 group-hover:text-info transition-colors">
+                <Sparkles className="size-7 text-info shrink-0 animate-pulse" />
+                SRS vs Actual Variance
+              </h3>
+              <span className="chip border text-xs font-extrabold px-3.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm bg-secondary text-ink border-hairline">
+                <Layers className="size-3.5 text-info" />
+                {varianceRows.length} Requirements
+              </span>
+              <span className="text-xs font-extrabold text-info bg-info/10 border border-info/30 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm group-hover:bg-info group-hover:text-white transition-all">
+                <Sparkles className="size-3.5" />
+                Click to Launch Requirement Variance Modal
+              </span>
+            </div>
+            <p className="text-xs text-subtext mt-2 max-w-xl">
+              Schedule deviation analysis mapped row-by-row to software requirements and Jira execution.
             </p>
           </div>
-          <div className="text-right shrink-0 bg-card border border-hairline px-4 py-2 rounded-2xl shadow-sm">
-            <div className="text-[10px] uppercase tracking-wider text-subtext font-bold">Team Total Variance</div>
-            <div className="text-base font-display font-bold text-ink">
-              {Number(results.schedule_variance || 0).toFixed(1)}h <span className="text-xs font-normal text-subtext">(SRS {Number(results.srs_schedule_variance || 0).toFixed(1)}h + Ghost +{Number(results.ghost_hours || 0).toFixed(1)}h)</span>
+
+          <div className="flex items-center gap-3">
+            <div className="px-5 py-2.5 rounded-2xl bg-info/10 border border-info/30 font-bold text-xs text-info flex items-center gap-2 group-hover:bg-info group-hover:text-white transition-all shadow-sm shrink-0">
+              <span>View Reconciliation</span>
             </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <div className="min-w-[800px]">
-             <div className="grid grid-cols-12 px-8 py-3 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
-               <div className="col-span-3">Developer</div>
-               <div className="col-span-4">Assigned Modules</div>
-               <div className="col-span-1 text-center">Planned</div>
-               <div className="col-span-1 text-center">Actual</div>
-               <div className="col-span-2 text-center">Variance</div>
-               <div className="col-span-1 text-center">Efficiency</div>
-             </div>
-             <div className="divide-y divide-hairline">
-               {developerRows.map((row, index) => (
-                 <div key={`${row.developer}-${index}`} className="grid grid-cols-12 px-8 py-4 items-center">
-                   <div className="col-span-3 text-sm font-medium text-ink">{row.developer}</div>
-                   <div className="col-span-4 text-sm text-subtext pr-4">
-                     {(row.assigned_modules || []).slice(0, 3).join(", ")}
-                     {(row.assigned_modules && row.assigned_modules.length > 3) ? `, +${row.assigned_modules.length - 3} more` : ""}
-                   </div>
-                   <div className="col-span-1 text-center text-sm">{Number(row.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
-                   <div className="col-span-1 text-center text-sm">{Number(row.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
-                   <div className={`col-span-2 text-center text-sm font-bold ${row.variance > 0 ? "text-risk" : row.variance < 0 ? "text-success" : "text-subtext"}`}>
-                     {row.variance > 0 ? `+${Number(row.variance).toFixed(1).replace(/\.0$/, '')}` : Number(row.variance || 0).toFixed(1).replace(/\.0$/, '')}h
-                   </div>
-                   <div className="col-span-1 text-center text-sm font-medium">
-                     {Math.round(row.efficiency || 0)}%
-                   </div>
-                 </div>
-               ))}
-               {!developerRows.length && <div className="p-8 text-center text-subtext">No developer rows available.</div>}
-             </div>
+      </div>
+
+      {/* Glassmorphic Cinematic Pop-up Modal for SRS vs Actual Variance */}
+      {isVarianceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 md:p-10 bg-ink/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-background border border-hairline/80 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300"
+          >
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card">
+              <div className="flex items-center gap-3">
+                <Sparkles className="size-7 text-info shrink-0 animate-pulse" />
+                <div>
+                  <h3 className="font-display text-2xl text-ink font-bold">SRS vs Actual Variance</h3>
+                  <p className="text-xs text-subtext mt-0.5">Schedule deviation analysis mapped to requirements. Click any row to launch AI deep-dive analysis.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsVarianceModalOpen(false)}
+                  className="size-10 rounded-full bg-secondary hover:bg-rose/20 hover:text-risk flex items-center justify-center text-subtext font-bold transition-all cursor-pointer"
+                  title="Close Modal"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body (Table) */}
+            <div className="p-8 overflow-y-auto flex-1 bg-background">
+              <div className="soft-card overflow-hidden border border-hairline">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[900px]">
+                     <div className="grid grid-cols-12 px-8 py-3.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline items-center font-bold">
+                       <div className="col-span-2">Module</div>
+                       <div className="col-span-4">Requirement</div>
+                       <div className="col-span-1 text-center">Planned</div>
+                       <div className="col-span-1 text-center">Actual</div>
+                       <div className="col-span-1 text-center">Variance</div>
+                       <div className="col-span-2 text-center">Schedule Status</div>
+                       <div className="col-span-1 text-right">FAQs</div>
+                     </div>
+                     <div className="divide-y divide-hairline">
+                       {varianceRows.map((row, index) => {
+                         const statusLower = (row.status || "").toLowerCase();
+                         const isDone = statusLower === "done" || statusLower === "completed" || statusLower === "resolved";
+                         
+                         let scheduleStatus = "On Track";
+                         let statusColor = "bg-lavender/40 text-ink";
+                         
+                         if (row.variance > 0) {
+                           scheduleStatus = "Delayed";
+                           statusColor = "bg-rose/20 text-risk";
+                         } else if (row.variance < 0) {
+                           const remaining = isDone ? 0 : Math.max(0, Number(row.planned_hours || 0) - Number(row.actual_hours || 0));
+                           if (isDone && remaining === 0 && Number(row.actual_hours || 0) > 0) {
+                             scheduleStatus = "Advanced";
+                             statusColor = "bg-pista text-ink";
+                           } else if (row.actual_hours === 0) {
+                             scheduleStatus = "Pending";
+                             statusColor = "bg-slate-100 text-slate-500";
+                           } else {
+                             scheduleStatus = "On Track";
+                             statusColor = "bg-lavender/40 text-ink";
+                           }
+                         }
+                         
+                         return (
+                         <div 
+                           key={`${row.requirement}-${index}`} 
+                           onClick={() => {
+                             setIsVarianceModalOpen(false);
+                             handleRowClick(row);
+                           }}
+                           className="grid grid-cols-12 px-8 py-4 items-center hover:bg-secondary/50 cursor-pointer transition group"
+                         >
+                           <div className="col-span-2 text-sm text-subtext">{row.module}</div>
+                           <div className="col-span-4 text-sm font-medium text-ink pr-4">{row.requirement}</div>
+                           <div className="col-span-1 text-center text-sm">{Number(row.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
+                           <div className="col-span-1 text-center text-sm">{Number(row.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
+                           <div className={`col-span-1 text-center text-sm font-bold ${row.variance > 0 ? "text-risk" : row.variance < 0 ? "text-success" : "text-subtext"}`}>
+                             {row.variance > 0 ? `+${Number(row.variance).toFixed(1).replace(/\.0$/, '')}` : Number(row.variance || 0).toFixed(1).replace(/\.0$/, '')}h
+                           </div>
+                           <div className="col-span-2 flex justify-center">
+                             <span className={`px-3 py-1 text-xs font-medium rounded-full min-w-[85px] text-center inline-block ${statusColor}`}>
+                               {scheduleStatus}
+                             </span>
+                           </div>
+                           <div className="col-span-1 flex justify-end">
+                             <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-ink/40 group-hover:text-info transition-colors">
+                               <Sparkles size={12} /> AI Insights
+                             </span>
+                           </div>
+                         </div>
+                       )})}
+                       {!varianceRows.length && <div className="p-8 text-center text-subtext">No variance rows available.</div>}
+                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sleek Clickable Card for Developer Performance */}
+      <div className="bg-card border border-hairline rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden transition-all duration-300">
+        <div className="absolute -top-32 -right-32 size-96 bg-info/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-32 size-96 bg-emerald/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div 
+          onClick={() => setIsDevModalOpen(true)}
+          className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10 cursor-pointer select-none group"
+        >
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="font-display text-2xl md:text-3xl text-ink tracking-tight flex items-center gap-2.5 group-hover:text-info transition-colors">
+                <Users className="size-7 text-info shrink-0 animate-pulse" />
+                Developer Performance
+              </h3>
+              <span className="chip border text-xs font-extrabold px-3.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm bg-secondary text-ink border-hairline">
+                <Users className="size-3.5 text-info" />
+                {developerRows.length} Contributors
+              </span>
+              <span className="text-xs font-extrabold text-info bg-info/10 border border-info/30 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm group-hover:bg-info group-hover:text-white transition-all">
+                <Sparkles className="size-3.5" />
+                Click to Launch Developer Velocity Modal
+              </span>
+            </div>
+            <p className="text-xs text-subtext mt-2 max-w-xl">
+              Individual developer velocity, hours allocation, and schedule variance across assigned requirements.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="px-5 py-2.5 rounded-2xl bg-info/10 border border-info/30 font-bold text-xs text-info flex items-center gap-2 group-hover:bg-info group-hover:text-white transition-all shadow-sm shrink-0">
+              <span>View Performance</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Glassmorphic Cinematic Pop-up Modal for Developer Performance */}
+      {isDevModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 md:p-10 bg-ink/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-background border border-hairline/80 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300"
+          >
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card">
+              <div className="flex items-center gap-3">
+                <Users className="size-7 text-info shrink-0 animate-pulse" />
+                <div>
+                  <h3 className="font-display text-2xl text-ink font-bold">Developer Performance & Velocity</h3>
+                  <p className="text-xs text-subtext mt-0.5">Individual efficiency metrics and workload breakdown.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsDevModalOpen(false)}
+                  className="size-10 rounded-full bg-secondary hover:bg-rose/20 hover:text-risk flex items-center justify-center text-subtext font-bold transition-all cursor-pointer"
+                  title="Close Modal"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body (Table) */}
+            <div className="p-8 overflow-y-auto flex-1 bg-background">
+              <div className="soft-card overflow-hidden border border-hairline">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[800px]">
+                     <div className="grid grid-cols-12 px-8 py-3.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline font-bold">
+                       <div className="col-span-3">Developer</div>
+                       <div className="col-span-4">Assigned Modules</div>
+                       <div className="col-span-1 text-center">Planned</div>
+                       <div className="col-span-1 text-center">Actual</div>
+                       <div className="col-span-2 text-center">Variance</div>
+                       <div className="col-span-1 text-center">Efficiency</div>
+                     </div>
+                     <div className="divide-y divide-hairline">
+                       {developerRows.map((row, index) => (
+                         <div key={`${row.developer}-${index}`} className="grid grid-cols-12 px-8 py-4 items-center hover:bg-secondary/40 transition">
+                           <div className="col-span-3 text-sm font-bold text-ink flex items-center gap-2">
+                             <div className="size-8 rounded-full bg-info/10 text-info border border-info/30 grid place-items-center font-display font-bold text-xs shrink-0">
+                               {(row.developer || "U").charAt(0).toUpperCase()}
+                             </div>
+                             <span className="truncate">{row.developer}</span>
+                           </div>
+                           <div className="col-span-4 text-sm text-subtext pr-4">
+                             {(row.assigned_modules || []).slice(0, 3).join(", ")}
+                             {(row.assigned_modules && row.assigned_modules.length > 3) ? `, +${row.assigned_modules.length - 3} more` : ""}
+                           </div>
+                           <div className="col-span-1 text-center text-sm font-semibold">{Number(row.planned_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
+                           <div className="col-span-1 text-center text-sm font-semibold">{Number(row.actual_hours || 0).toFixed(1).replace(/\.0$/, '')}h</div>
+                           <div className={`col-span-2 text-center text-sm font-bold ${row.variance > 0 ? "text-risk" : row.variance < 0 ? "text-success" : "text-subtext"}`}>
+                             {row.variance > 0 ? `+${Number(row.variance).toFixed(1).replace(/\.0$/, '')}` : Number(row.variance || 0).toFixed(1).replace(/\.0$/, '')}h
+                           </div>
+                           <div className="col-span-1 text-center text-sm font-bold">
+                             <span className={`px-2.5 py-1 rounded-full text-xs ${
+                               (row.efficiency || 0) >= 100 ? "bg-emerald/15 text-emerald" : (row.efficiency || 0) >= 80 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-rose/15 text-risk"
+                             }`}>
+                               {Math.round(row.efficiency || 0)}%
+                             </span>
+                           </div>
+                         </div>
+                       ))}
+                       {!developerRows.length && <div className="p-8 text-center text-subtext">No developer rows available.</div>}
+                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Row-Level Intelligence Drawer */}
       {isDrawerOpen && selectedRow && (
@@ -335,6 +535,15 @@ function DelayAnalysisResults({ results }) {
                     </div>
                   </div>
 
+                  {selectedRow.evidence && (
+                    <div className="bg-beige/40 border border-hairline rounded-2xl p-4 text-xs font-mono text-ink/80 leading-relaxed break-words">
+                      <div className="font-sans font-bold text-[11px] uppercase tracking-wider text-subtext mb-1 flex items-center gap-1.5">
+                        <Sparkles className="size-3.5 text-primary" /> Audit Traceability & Mapped Tickets
+                      </div>
+                      {selectedRow.evidence}
+                    </div>
+                  )}
+
                   {rowIntelligence && rowIntelligence.error && (
                     <div className="bg-warning/20 border border-warning/30 rounded-2xl p-5 flex items-start gap-3">
                       <AlertTriangle className="size-5 text-warning shrink-0" />
@@ -372,7 +581,7 @@ function DelayAnalysisResults({ results }) {
                                 {activeFaq === idx ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                               </button>
                               {activeFaq === idx && (
-                                <div className="px-4 pb-3 pt-1 text-sm text-subtext bg-card/50">
+                                <div className="px-4 pb-3 pt-2 text-sm text-subtext bg-card/50 whitespace-pre-wrap font-sans">
                                   {faq.answer}
                                 </div>
                               )}

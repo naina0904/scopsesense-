@@ -13,19 +13,23 @@ import {
     PlayCircle,
     FileBarChart,
     BrainCircuit,
-    Plug
+    Plug,
+    HelpCircle
 } from "lucide-react";
 
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 import api from "../api/client";
 import IntegrationModal from "./IntegrationModal";
+import { useAudit } from "../context/AuditContext";
 
 function Sidebar() {
     const location = useLocation();
+    const navigate = useNavigate();
     const pathname = location.pathname;
+    const { showCopilot, setShowCopilot, showFaqs, setShowFaqs } = useAudit();
     const [role, setRole] = useState(localStorage.getItem("scopesense_role") || "manager");
     
     // Modal state
@@ -80,6 +84,30 @@ function Sidebar() {
         { to: "/execute", label: "Execute Audit", icon: PlayCircle, step: 6 },
         { section: "Outcomes" },
         { to: "/results", label: "Results", icon: Clock3 },
+        { 
+            label: "Project FAQs", 
+            icon: HelpCircle, 
+            onClick: () => {
+                if (pathname !== "/results") navigate("/results");
+                setShowFaqs(!showFaqs);
+                if (!showFaqs) {
+                    setTimeout(() => document.getElementById("faq-section")?.scrollIntoView({ behavior: "smooth" }), 100);
+                }
+            },
+            active: pathname.startsWith("/results") && showFaqs
+        },
+        { 
+            label: "Project AI Copilot", 
+            icon: Bot, 
+            onClick: () => {
+                if (pathname !== "/results") navigate("/results");
+                setShowCopilot(!showCopilot);
+                if (!showCopilot) {
+                    setTimeout(() => document.getElementById("copilot-section")?.scrollIntoView({ behavior: "smooth" }), 100);
+                }
+            },
+            active: pathname.startsWith("/results") && showCopilot
+        },
     ];
 
     return (
@@ -109,8 +137,22 @@ function Sidebar() {
                             {it.section}
                         </div>
                     );
-                    const active = pathname.startsWith(it.to);
+                    const active = "active" in it ? it.active : pathname.startsWith(it.to);
                     const Icon = it.icon;
+                    if ("onClick" in it) {
+                        return (
+                            <button 
+                                key={it.label} 
+                                onClick={it.onClick}
+                                className={`w-full group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition text-left cursor-pointer ${
+                                    active ? "bg-card border border-hairline text-ink shadow-[0_1px_2px_rgba(31,41,55,0.04)] font-semibold" : "text-ink/70 hover:bg-sidebar-accent"
+                                }`}
+                            >
+                                <Icon className="size-4" />
+                                <span className="flex-1">{it.label}</span>
+                            </button>
+                        );
+                    }
                     return (
                         <NavLink 
                             key={it.to} 

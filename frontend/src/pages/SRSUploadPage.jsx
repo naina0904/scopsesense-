@@ -15,8 +15,8 @@ function SRSUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fileName, setFileName] = useState("");
-  const [openContainer1, setOpenContainer1] = useState(true);
-  const [openContainer2, setOpenContainer2] = useState(true);
+  const [showTablesModal, setShowTablesModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("table1");
   const [projectDevelopers, setProjectDevelopers] = useState([]);
   const [showScopeModal, setShowScopeModal] = useState(false);
   const [selectedScope, setSelectedScope] = useState(() => localStorage.getItem("auditScopeMode") || "full_lifecycle");
@@ -56,6 +56,7 @@ function SRSUploadPage() {
         if (res.project_developers) {
           setProjectDevelopers(res.project_developers);
         }
+        setShowTablesModal(true);
       }
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Failed to upload and parse SRS file.");
@@ -70,14 +71,11 @@ function SRSUploadPage() {
     setFeatures(updated);
   };
 
-  const isIgnoredRow = (reqName) => {
-    const norm = (reqName || "").toLowerCase().trim();
-    return ["client testing", "deployment", "external testing"].includes(norm);
-  };
+  const isIgnoredRow = () => false;
 
   const isPhaseRow = (reqName, modName) => {
     const norm = (reqName || "").toLowerCase().trim();
-    return modName === "Project Phases" || ["internal testing"].includes(norm);
+    return modName === "Project Phases" || ["internal testing", "client testing", "deployment", "testing", "qa"].some(p => norm.includes(p));
   };
   const isSummaryHeader = (reqName) => {
     const norm = (reqName || "").toLowerCase().trim();
@@ -119,7 +117,10 @@ function SRSUploadPage() {
     try {
       setSaving(true);
       setError(null);
-      const cleanedFeatures = features.filter(f => !isIgnoredRow(f.requirement)).map(({ dependencies, ...rest }) => rest);
+      const isDevOnly = selectedScope === "core_dev" || localStorage.getItem("auditScopeMode") === "core_dev";
+      const cleanedFeatures = features
+        .filter(f => !isIgnoredRow(f.requirement) && (!isDevOnly || !isPhaseRow(f.requirement, f.module)))
+        .map(({ dependencies, ...rest }) => rest);
       await savePlannedData(cleanedFeatures);
       setExtractionConfirmed(true);
       navigate("/configuration");
@@ -153,9 +154,7 @@ function SRSUploadPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Steps 1 & 2 · Audit workflow"
         title="Upload SRS & Review Requirements."
-        lede="Drop in the requirements specification. ScopeSense will parse every requirement, owner, and acceptance criterion."
         primary={features.length > 0 ? { label: saving ? "Saving..." : "Confirm & continue", onClick: handleSaveAndApprove } : undefined}
       />
       <PageBody>
@@ -231,192 +230,308 @@ function SRSUploadPage() {
           ]));
 
           return (
-            <div className="mt-10 space-y-8">
-              {/* Container 1: Design and Deployment */}
-              <div className="soft-card overflow-hidden border border-hairline bg-card shadow-sm">
-                <div 
-                  onClick={() => setOpenContainer1(!openContainer1)}
-                  className="flex justify-between items-center px-6 py-4 bg-lavender/25 cursor-pointer select-none border-b border-hairline hover:bg-lavender/35 transition border-l-4 border-l-primary"
-                >
-                  <div className="flex items-center gap-3">
-                    {openContainer1 ? <ChevronDown size={20} className="text-primary" /> : <ChevronRight size={20} className="text-primary" />}
-                    <div>
-                      <h3 className="font-display text-xl font-bold text-ink">Table 1: Design and Deployment</h3>
-                      <p className="text-subtext text-xs mt-0.5">Core software feature requirements parsed from SRS ({table1Items.length} Features)</p>
-                    </div>
+            <>
+              {/* Clean Summary Banner instead of huge scrolling tables */}
+              <div className="mt-8 soft-card p-6 bg-card border border-hairline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 shadow-md bg-gradient-to-r from-card to-lavender/10">
+                <div className="flex items-center gap-4">
+                  <div className="size-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary grid place-items-center font-display text-2xl font-bold shadow-sm shrink-0">
+                    <FileText className="size-7" />
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono font-semibold">
-                      TOTAL ESTIMATED HOURS: {table1TotalHours.toFixed(1)} hrs
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display text-xl font-bold text-ink">SRS Requirements Parsed Successfully</h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-success/20 text-success text-xs font-bold border border-success/30 flex items-center gap-1">
+                        <CheckCircle size={12} /> Ready
+                      </span>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); addFeatureRow(); setOpenContainer1(true); }}
-                      className="h-8 px-3 rounded-full border border-hairline bg-card text-xs font-medium hover:bg-secondary transition flex items-center gap-1.5 shadow-sm"
-                    >
-                      <Plus size={14} /> Add Feature
-                    </button>
+                    <p className="text-subtext text-xs mt-1">
+                      {table1Items.length} Core Dev Features ({table1TotalHours.toFixed(1)} hrs) · {table2Items.length} QA & Testing Phases ({table2TotalHours.toFixed(1)} hrs) · <span className="font-semibold text-ink">Total: {(table1TotalHours + table2TotalHours).toFixed(1)} hrs</span>
+                    </p>
                   </div>
                 </div>
-
-                {openContainer1 && (
-                  <div>
-                    <div className="grid grid-cols-12 px-6 py-2.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
-                      <div className="col-span-2">Module / Epic</div>
-                      <div className="col-span-4">Requirement</div>
-                      <div className="col-span-2">Owner</div>
-                      <div className="col-span-2">Priority</div>
-                      <div className="col-span-1 text-center">Hours</div>
-                      <div className="col-span-1 text-right">Actions</div>
-                    </div>
-                    
-                    <div className="divide-y divide-hairline max-h-[450px] overflow-y-auto">
-                      {table1Items.map((feature) => (
-                        <div key={feature.masterIndex} className="grid grid-cols-12 px-6 py-2.5 items-center hover:bg-secondary/40 transition gap-4">
-                          <div className="col-span-2">
-                            <input
-                              type="text"
-                              value={feature.module || ""}
-                              onChange={(e) => handleFieldChange(feature.masterIndex, "module", e.target.value)}
-                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                          </div>
-                          <div className="col-span-4">
-                            <input
-                              type="text"
-                              value={feature.requirement || ""}
-                              onChange={(e) => handleFieldChange(feature.masterIndex, "requirement", e.target.value)}
-                              className="bg-card border border-hairline rounded px-2 py-1 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <select
-                              value={feature.assigned_developer || "Unassigned"}
-                              onChange={(e) => handleFieldChange(feature.masterIndex, "assigned_developer", e.target.value)}
-                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            >
-                              <option value="Unassigned">Unassigned</option>
-                              {uniqueDevelopers.map((dev, idx) => (
-                                <option key={idx} value={dev}>{dev}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            <select
-                              value={feature.priority || "Medium"}
-                              onChange={(e) => handleFieldChange(feature.masterIndex, "priority", e.target.value)}
-                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            >
-                              <option value="High">High</option>
-                              <option value="Medium">Medium</option>
-                              <option value="Low">Low</option>
-                            </select>
-                          </div>
-                          <div className="col-span-1">
-                            <input
-                              type="number"
-                              step="0.5"
-                              value={feature.planned_hours || 0}
-                              onChange={(e) => handleFieldChange(feature.masterIndex, "planned_hours", parseFloat(e.target.value) || 0)}
-                              className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary text-center font-mono"
-                            />
-                          </div>
-                          <div className="col-span-1 text-right">
-                            <button
-                              onClick={() => deleteRow(feature.masterIndex)}
-                              className="text-risk hover:text-red-700 p-1 rounded hover:bg-rose/30 transition"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                  <button
+                    onClick={() => setShowTablesModal(true)}
+                    className="h-11 px-6 rounded-full border border-hairline bg-card hover:bg-secondary text-ink font-semibold text-sm transition flex items-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    <Sparkles className="size-4 text-primary" />
+                    <span>Review & Edit Tables</span>
+                    <ArrowUpRight className="size-4" />
+                  </button>
+                  <button
+                    onClick={handleSaveAndApprove}
+                    disabled={saving}
+                    className="h-11 px-6 rounded-full bg-ink text-background hover:opacity-90 font-bold text-sm transition flex items-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    <span>{saving ? "Saving..." : "Confirm & continue"}</span>
+                    <ArrowRight className="size-4" />
+                  </button>
+                </div>
               </div>
 
-              {/* Container 2: Project Phases */}
-              <div className="soft-card overflow-hidden border border-hairline bg-card shadow-sm">
-                <div 
-                  onClick={() => setOpenContainer2(!openContainer2)}
-                  className="flex justify-between items-center px-6 py-4 bg-lavender/25 cursor-pointer select-none border-b border-hairline hover:bg-lavender/35 transition border-l-4 border-l-primary"
-                >
-                  <div className="flex items-center gap-3">
-                    {openContainer2 ? <ChevronDown size={20} className="text-primary" /> : <ChevronRight size={20} className="text-primary" />}
-                    <div>
-                      <h3 className="font-display text-xl font-bold text-ink">Table 2: Project Phases</h3>
-                      <p className="text-subtext text-xs mt-0.5">Internal testing, client testing, and deployment schedule ({table2Items.length} Phases)</p>
+              {/* Cinematic Pop-Up Slider Modal with Blurred Background */}
+              {showTablesModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-md p-4 sm:p-6 md:p-10 animate-in fade-in duration-200">
+                  <div className="bg-background border border-hairline rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+                    {/* Modal Header */}
+                    <div className="px-8 py-5 border-b border-hairline flex items-center justify-between bg-card/50">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                          <Sparkles className="size-4" /> AI Extraction Review · Cinematic Slider Workspace
+                        </div>
+                        <h3 className="font-display text-2xl font-bold text-ink mt-1">Extracted SRS Requirements & Project Phases</h3>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="hidden sm:flex bg-secondary p-1 rounded-full border border-hairline">
+                          <button
+                            onClick={() => setActiveTab("table1")}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                              activeTab === "table1" ? "bg-ink text-background shadow-sm" : "text-subtext hover:text-ink"
+                            }`}
+                          >
+                            <span>Table 1: Design & Deployment</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === "table1" ? "bg-background/20 text-background" : "bg-card text-ink"}`}>
+                              {table1Items.length}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => setActiveTab("table2")}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                              activeTab === "table2" ? "bg-ink text-background shadow-sm" : "text-subtext hover:text-ink"
+                            }`}
+                          >
+                            <span>Table 2: Project Phases</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === "table2" ? "bg-background/20 text-background" : "bg-card text-ink"}`}>
+                              {table2Items.length}
+                            </span>
+                          </button>
+                        </div>
+                        <button 
+                          onClick={() => setShowTablesModal(false)}
+                          className="size-10 rounded-full border border-hairline bg-card hover:bg-secondary grid place-items-center text-subtext hover:text-ink transition text-lg font-bold cursor-pointer"
+                          title="Close Modal"
+                        >
+                          &times;
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-semibold">
-                      TOTAL HOURS: {table2TotalHours.toFixed(1)} hrs
+
+                    {/* Mobile Tab Switcher */}
+                    <div className="sm:hidden px-6 py-3 border-b border-hairline bg-secondary flex gap-2">
+                      <button
+                        onClick={() => setActiveTab("table1")}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          activeTab === "table1" ? "bg-ink text-background shadow-sm" : "bg-card text-subtext"
+                        }`}
+                      >
+                        Table 1 ({table1Items.length})
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("table2")}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          activeTab === "table2" ? "bg-ink text-background shadow-sm" : "bg-card text-subtext"
+                        }`}
+                      >
+                        Table 2 ({table2Items.length})
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); addPhaseRow(); setOpenContainer2(true); }}
-                      className="h-8 px-3 rounded-full border border-hairline bg-card text-xs font-medium hover:bg-secondary transition flex items-center gap-1.5 shadow-sm"
-                    >
-                      <Plus size={14} /> Add Phase
-                    </button>
+
+                    {/* Modal Body / Slider */}
+                    <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-background/50">
+                      {activeTab === "table1" ? (
+                        /* Table 1 Content */
+                        <div className="soft-card overflow-hidden border border-hairline bg-card shadow-sm">
+                          <div className="flex justify-between items-center px-6 py-4 bg-lavender/25 border-b border-hairline border-l-4 border-l-primary">
+                            <div>
+                              <h3 className="font-display text-xl font-bold text-ink">Table 1: Design and Deployment</h3>
+                              <p className="text-subtext text-xs mt-0.5">Core software feature requirements parsed from SRS ({table1Items.length} Features)</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono font-semibold">
+                                TOTAL ESTIMATED HOURS: {table1TotalHours.toFixed(1)} hrs
+                              </div>
+                              <button
+                                onClick={addFeatureRow}
+                                className="h-8 px-3 rounded-full border border-hairline bg-card text-xs font-medium hover:bg-secondary transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                              >
+                                <Plus size={14} /> Add Feature
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-12 px-6 py-2.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
+                            <div className="col-span-2">Module / Epic</div>
+                            <div className="col-span-3">Requirement</div>
+                            <div className="col-span-3">Owner</div>
+                            <div className="col-span-2">Priority</div>
+                            <div className="col-span-1 text-center">Hours</div>
+                            <div className="col-span-1 text-right">Actions</div>
+                          </div>
+                          
+                          <div className="divide-y divide-hairline">
+                            {table1Items.map((feature) => (
+                              <div key={feature.masterIndex} className="grid grid-cols-12 px-6 py-2.5 items-center hover:bg-secondary/40 transition gap-4">
+                                <div className="col-span-2">
+                                  <input
+                                    type="text"
+                                    value={feature.module || ""}
+                                    onChange={(e) => handleFieldChange(feature.masterIndex, "module", e.target.value)}
+                                    className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                </div>
+                                <div className="col-span-3">
+                                  <input
+                                    type="text"
+                                    value={feature.requirement || ""}
+                                    onChange={(e) => handleFieldChange(feature.masterIndex, "requirement", e.target.value)}
+                                    className="bg-card border border-hairline rounded px-2 py-1 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                </div>
+                                <div className="col-span-3">
+                                  <select
+                                    value={feature.assigned_developer || "Unassigned"}
+                                    onChange={(e) => handleFieldChange(feature.masterIndex, "assigned_developer", e.target.value)}
+                                    className="bg-card border border-hairline rounded pl-2.5 pr-7 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary truncate cursor-pointer shadow-2xs"
+                                  >
+                                    <option value="Unassigned">Unassigned</option>
+                                    {uniqueDevelopers.map((dev, idx) => (
+                                      <option key={idx} value={dev}>{dev}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="col-span-2">
+                                  <select
+                                    value={feature.priority || "Medium"}
+                                    onChange={(e) => handleFieldChange(feature.masterIndex, "priority", e.target.value)}
+                                    className="bg-card border border-hairline rounded pl-2.5 pr-7 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary truncate cursor-pointer shadow-2xs"
+                                  >
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
+                                  </select>
+                                </div>
+                                <div className="col-span-1">
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    value={feature.planned_hours || 0}
+                                    onChange={(e) => handleFieldChange(feature.masterIndex, "planned_hours", parseFloat(e.target.value) || 0)}
+                                    className="bg-card border border-hairline rounded px-2 py-1 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary text-center font-mono"
+                                  />
+                                </div>
+                                <div className="col-span-1 text-right">
+                                  <button
+                                    onClick={() => deleteRow(feature.masterIndex)}
+                                    className="text-risk hover:text-red-700 p-1 rounded hover:bg-rose/30 transition cursor-pointer"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        /* Table 2 Content */
+                        <div className="soft-card overflow-hidden border border-hairline bg-card shadow-sm">
+                          <div className="flex justify-between items-center px-6 py-4 bg-lavender/25 border-b border-hairline border-l-4 border-l-primary">
+                            <div>
+                              <h3 className="font-display text-xl font-bold text-ink">Table 2: Project Phases</h3>
+                              <p className="text-subtext text-xs mt-0.5">Internal testing, client testing, and deployment schedule ({table2Items.length} Phases)</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-semibold">
+                                TOTAL HOURS: {table2TotalHours.toFixed(1)} hrs
+                              </div>
+                              <button
+                                onClick={addPhaseRow}
+                                className="h-8 px-3 rounded-full border border-hairline bg-card text-xs font-medium hover:bg-secondary transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                              >
+                                <Plus size={14} /> Add Phase
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-12 px-6 py-2.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
+                            <div className="col-span-5">Requirement (Phase Name)</div>
+                            <div className="col-span-4">Owner (Assigned Developer)</div>
+                            <div className="col-span-2 text-center">Estimated Hours</div>
+                            <div className="col-span-1 text-right">Actions</div>
+                          </div>
+                          
+                          <div className="divide-y divide-hairline">
+                            {table2Items.map((phase) => (
+                              <div key={phase.masterIndex} className="grid grid-cols-12 px-6 py-3 items-center hover:bg-secondary/40 transition gap-4">
+                                <div className="col-span-5">
+                                  <input
+                                    type="text"
+                                    value={phase.requirement || ""}
+                                    onChange={(e) => handleFieldChange(phase.masterIndex, "requirement", e.target.value)}
+                                    className="bg-card border border-hairline rounded px-3 py-1.5 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                </div>
+                                <div className="col-span-4">
+                                  <select
+                                    value={phase.assigned_developer || "Unassigned"}
+                                    onChange={(e) => handleFieldChange(phase.masterIndex, "assigned_developer", e.target.value)}
+                                    className="bg-card border border-hairline rounded pl-3 pr-7 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary truncate cursor-pointer shadow-2xs"
+                                  >
+                                    <option value="Unassigned">Unassigned</option>
+                                    {uniqueDevelopers.map((dev, idx) => (
+                                      <option key={idx} value={dev}>{dev}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="col-span-2">
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    value={phase.planned_hours || 0}
+                                    onChange={(e) => handleFieldChange(phase.masterIndex, "planned_hours", parseFloat(e.target.value) || 0)}
+                                    className="bg-card border border-hairline rounded px-3 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary text-center font-mono font-semibold"
+                                  />
+                                </div>
+                                <div className="col-span-1 text-right">
+                                  <button
+                                    onClick={() => deleteRow(phase.masterIndex)}
+                                    className="text-risk hover:text-red-700 p-1.5 rounded hover:bg-rose/30 transition cursor-pointer"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="px-8 py-4 border-t border-hairline bg-card flex items-center justify-between">
+                      <div className="text-xs text-subtext">
+                        Make any inline edits above. Changes are saved automatically to your workspace.
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShowTablesModal(false)}
+                          className="h-10 px-5 rounded-full border border-hairline bg-card hover:bg-secondary text-ink font-semibold text-xs transition cursor-pointer"
+                        >
+                          Close & Review Summary
+                        </button>
+                        <button
+                          onClick={() => { setShowTablesModal(false); handleSaveAndApprove(); }}
+                          disabled={saving}
+                          className="h-10 px-6 rounded-full bg-ink text-background hover:opacity-90 font-bold text-xs transition flex items-center gap-2 shadow-sm cursor-pointer"
+                        >
+                          <span>{saving ? "Saving..." : "Confirm & continue"}</span>
+                          <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                {openContainer2 && (
-                  <div>
-                    <div className="grid grid-cols-12 px-6 py-2.5 text-[11px] uppercase tracking-wider text-subtext bg-beige/40 border-b border-hairline">
-                      <div className="col-span-5">Requirement (Phase Name)</div>
-                      <div className="col-span-4">Owner (Assigned Developer)</div>
-                      <div className="col-span-2 text-center">Estimated Hours</div>
-                      <div className="col-span-1 text-right">Actions</div>
-                    </div>
-                    
-                    <div className="divide-y divide-hairline">
-                      {table2Items.map((phase) => (
-                        <div key={phase.masterIndex} className="grid grid-cols-12 px-6 py-3 items-center hover:bg-secondary/40 transition gap-4">
-                          <div className="col-span-5">
-                            <input
-                              type="text"
-                              value={phase.requirement || ""}
-                              onChange={(e) => handleFieldChange(phase.masterIndex, "requirement", e.target.value)}
-                              className="bg-card border border-hairline rounded px-3 py-1.5 text-xs font-medium text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                          </div>
-                          <div className="col-span-4">
-                            <select
-                              value={phase.assigned_developer || "Unassigned"}
-                              onChange={(e) => handleFieldChange(phase.masterIndex, "assigned_developer", e.target.value)}
-                              className="bg-card border border-hairline rounded px-3 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                            >
-                              <option value="Unassigned">Unassigned</option>
-                              {uniqueDevelopers.map((dev, idx) => (
-                                <option key={idx} value={dev}>{dev}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            <input
-                              type="number"
-                              step="0.5"
-                              value={phase.planned_hours || 0}
-                              onChange={(e) => handleFieldChange(phase.masterIndex, "planned_hours", parseFloat(e.target.value) || 0)}
-                              className="bg-card border border-hairline rounded px-3 py-1.5 text-xs text-ink w-full focus:outline-none focus:ring-1 focus:ring-primary text-center font-mono font-semibold"
-                            />
-                          </div>
-                          <div className="col-span-1 text-right">
-                            <button
-                              onClick={() => deleteRow(phase.masterIndex)}
-                              className="text-risk hover:text-red-700 p-1.5 rounded hover:bg-rose/30 transition"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+              )}
+            </>
           );
         })()}
 
@@ -431,9 +546,6 @@ function SRSUploadPage() {
               </div>
               <div>
                 <h3 className="font-display text-2xl text-ink">Choose Your Audit Evaluation Scope</h3>
-                <p className="text-sm text-subtext mt-2">
-                  Before initiating the audit, choose whether AI analysis and schedule calculations should evaluate Core Design & Development alone or the Full Lifecycle including Internal Testing.
-                </p>
               </div>
               <div className="grid grid-cols-1 gap-4 pt-2">
                 <div 

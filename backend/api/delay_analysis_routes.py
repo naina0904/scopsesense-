@@ -52,20 +52,25 @@ def get_session(session_id: str) -> dict:
         except Exception as e:
             logger.error(f"Redis get failed: {e}")
     # Fallback to DB
-    try:
-        audit_session_id = int(session_id)
-    except ValueError:
-        # Non-numeric session identifiers have no DB mapping yet
-        raise HTTPException(status_code=404, detail="Session not found")
     from backend.storage.database import SessionLocal
-    from backend.storage.models_extended import AuditResult, FindingRecord, FAQRecord
-    # Cannot use Depends here because this is a helper function that may be called outside a route context
+    from backend.storage.models_extended import AuditResult, FindingRecord, FAQRecord, AuditSession, PlatformFetchResult, SRSExtractionResult
     db = SessionLocal()
     try:
+        audit_session_id = None
+        try:
+            audit_session_id = int(session_id)
+        except ValueError:
+            p_key = session_id.split(":")[-1] if ":" in session_id else session_id
+            session_obj = db.query(AuditSession).filter(AuditSession.project_key == p_key).order_by(AuditSession.id.desc()).first()
+            if session_obj:
+                audit_session_id = session_obj.id
+
+        if not audit_session_id:
+            raise HTTPException(status_code=404, detail="Session not found")
+
         audit_result = db.query(AuditResult).filter(AuditResult.audit_session_id == audit_session_id).first()
         if audit_result:
-            # Reconstruct minimal session dict from DB records
-            # Reconstruct minimal session dict from DB records
+            audit_session = db.query(AuditSession).get(audit_session_id)
             seen_q = set()
             faqs = []
             for faq in db.query(FAQRecord).filter(FAQRecord.audit_session_id == audit_session_id).order_by(FAQRecord.relevance_score.desc()).all():
@@ -80,12 +85,46 @@ def get_session(session_id: str) -> dict:
                     })
             result_payload = audit_result.variance_json or {}
             result_payload["faqs"] = faqs
+
+            features_list = []
+            contributors_list = []
+            srs_features = []
+            platform_type = "jira"
+            project_key = result_payload.get("project_key", "Project")
+            provider = None
+
+            if audit_session:
+                platform_type = audit_session.platform_type or platform_type
+                project_key = audit_session.project_key or project_key
+                provider = getattr(audit_session, "provider", None)
+                if audit_session.normalized_data_json:
+                    features_list = audit_session.normalized_data_json
+                if audit_session.platform_fetch_result_id:
+                    p_res = db.query(PlatformFetchResult).get(audit_session.platform_fetch_result_id)
+                    if p_res:
+                        contributors_list = p_res.contributors_json or []
+                        if not features_list and p_res.actual_data_json:
+                            features_list = p_res.actual_data_json
+                if audit_session.srs_result_id:
+                    s_res = db.query(SRSExtractionResult).get(audit_session.srs_result_id)
+                    if s_res and s_res.extracted_json:
+                        srs_features = s_res.extracted_json.get("features", [])
+
+            platform_data_dict = {
+                "platform": platform_type,
+                "platform_key": project_key,
+                "features": features_list,
+                "contributors": contributors_list
+            }
+
             session_dict = {
                 "audit_result": result_payload,
                 "analysis_result": result_payload,
                 "result_payload": result_payload,
                 "faqs": faqs,
-                "platform_data": result_payload.get("platform_data", {}),
+                "platform_data": platform_data_dict,
+                "srs_features": srs_features,
+                "provider": provider
             }
             # Repopulate Redis cache for future reads
             if redis_client:
@@ -94,11 +133,12 @@ def get_session(session_id: str) -> dict:
                 except Exception as e:
                     logger.error(f"Redis set after DB fallback failed: {e}")
             return session_dict
+    except HTTPException:
+        raise
     except Exception as db_err:
         logger.error(f"DB fallback error in get_session: {db_err}")
     finally:
         db.close()
-    # Final fallback to in-memory dict
     raise HTTPException(status_code=404, detail="Session not found")
 
 
@@ -585,9 +625,20 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
         session_id = request.session_id or f"{request.platform}:{request.project_key}"
         session = get_session(session_id)
         if not session:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No active analysis session found for key '{session_id}'. Please analyze first."
+            logger.warning(f"No session found for {session_id}, falling back to general LLM response.")
+            from backend.llm.manager import LLMManager
+            from backend.config.settings import settings
+            provider = request.provider or settings.LLM_PROVIDER
+            llm = LLMManager(provider=provider)
+            try:
+                answer = llm.generate(f"You are an AI Copilot for software engineering project audits. Answer the user's question concisely and authoritatively: {request.question}")
+            except Exception as e:
+                logger.error(f"Fallback LLM generation failed: {e}")
+                answer = "I am ready to assist! Please execute or select an audit session to analyze specific project delays and metrics."
+            return ChatbotResponse(
+                question=request.question,
+                answer=answer,
+                timestamp=datetime.utcnow().isoformat()
             )
 
         result_payload = session.get("result_payload") or session.get("audit_result")
@@ -621,8 +672,8 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
                 timestamp=datetime.utcnow().isoformat(),
             )
             
-        # Fallback for general queries when platform_data is missing or dict
-        if result_payload and (not platform_data or not hasattr(platform_data, "platform")):
+        # Only fallback for general queries when both platform_data and result_payload are missing
+        if not platform_data and not result_payload:
             # Instead of naive keyword matching, we can use LLM with the result payload summary
             from backend.llm.manager import LLMManager
             from backend.config.settings import settings
@@ -669,17 +720,16 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
             )
 
         platform_data = session["platform_data"]
-        # Truncate large platform data payload to stay within token budget
-        from backend.llm.token_budget import truncate_to_budget
-        import json
-        platform_text = json.dumps(platform_data)
-        platform_text = truncate_to_budget(platform_text)
-        # Convert back to dict if needed (may lose data if truncated)
-        try:
-            platform_data = json.loads(platform_text)
-        except Exception:
-            # If truncation broke JSON, keep original dict
-            pass
+        # Truncate large platform data payload to stay within token budget if dict
+        if isinstance(platform_data, dict):
+            from backend.llm.token_budget import truncate_to_budget
+            import json
+            try:
+                platform_text = json.dumps(platform_data)
+                platform_text = truncate_to_budget(platform_text)
+                platform_data = json.loads(platform_text)
+            except Exception:
+                pass
         analysis_result = session["analysis_result"]
         faqs = session.get("faqs", [])
         srs_features = session.get("srs_features", [])

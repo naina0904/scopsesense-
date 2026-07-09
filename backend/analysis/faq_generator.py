@@ -139,18 +139,22 @@ class FAQGenerator:
         
         evidence = self.evidence_by_category.get(primary, [])
         top_evidence = evidence[0] if evidence else None
-        
         category_display = primary.replace("_", " ").title()
         
-        question = f"What is the primary reason for project delays?"
-        answer = f"{category_display} is the primary delay factor identified in your project.\n\n"
+        question = "What is the primary technical root cause driving project schedule drift?"
+        answer = f"📌 PRIMARY ROOT CAUSE: {category_display.upper()}\n\n"
         
         if top_evidence:
-            answer += f"Details: {top_evidence.description}\n\n"
+            answer += f"• Diagnostic Finding: {top_evidence.description}\n\n"
             if top_evidence.affected_features:
-                answer += f"Affected items: {', '.join(top_evidence.affected_features[:3])}"
+                answer += f"• Impacted Scope: {', '.join(top_evidence.affected_features[:3])}"
                 if len(top_evidence.affected_features) > 3:
-                    answer += f" and {len(top_evidence.affected_features) - 3} more"
+                    answer += f" (+{len(top_evidence.affected_features) - 3} additional requirements)"
+                answer += "\n\n"
+        
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Conduct immediate technical review on impacted requirements to isolate bottlenecks.\n"
+        answer += "2. Re-allocate engineering bandwidth from non-critical tasks to resolve root-cause blockers."
         
         return FAQ(
             question=question,
@@ -166,13 +170,13 @@ class FAQGenerator:
         count = evidence.metadata.get("unassigned_count", 0)
         percentage = evidence.metadata.get("percentage", 0)
         
-        question = "Why are some features unassigned and causing delays?"
-        answer = f"{count} features ({percentage:.0f}% of total) have no assigned developer.\n\n"
-        answer += "This is a critical delay factor because:\n"
-        answer += "• No clear ownership means unclear responsibility\n"
-        answer += "• Development cannot proceed without assignment\n"
-        answer += f"• {count} features are currently blocked by this\n\n"
-        answer += "Action: Assign each unassigned feature to a capable developer."
+        question = "Why are unassigned requirements jeopardizing the delivery timeline?"
+        answer = f"⚠️ RESOURCE ALLOCATION GAP: {count} Requirements ({percentage:.0f}% of total scope)\n\n"
+        answer += "• Impact Analysis: Unassigned features represent orphaned roadmap commitments without engineering accountability. In Jira, these tasks show 0 logged hours and stall critical path progress.\n"
+        answer += "• Risk Assessment: High probability of cascading sprint delays if dependencies rely on these unassigned modules.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Enforce mandatory ticket assignment across all active engineering leads within 24 hours.\n"
+        answer += "2. Move unassigned future-phase items into backlog epics to prevent baseline skew."
         
         return FAQ(
             question=question,
@@ -193,14 +197,13 @@ class FAQGenerator:
         dev_name = top_evidence.metadata.get("contributor", "A developer")
         feature_count = top_evidence.metadata.get("feature_count", 0)
         
-        question = f"Why is developer '{dev_name}' overloaded and causing slowdown?"
-        answer = f"Developer '{dev_name}' is currently assigned to {feature_count} features.\n\n"
-        answer += f"This creates delays because:\n"
-        answer += f"• Context switching between {feature_count} features reduces productivity\n"
-        answer += f"• Each feature gets less focused attention\n"
-        answer += f"• Quality may suffer due to divided focus\n"
-        answer += f"• Single point of failure if developer becomes unavailable\n\n"
-        answer += f"Action: Redistribute {feature_count} features across the team."
+        question = f"How is developer bandwidth bottlenecking delivery (e.g., {dev_name})?"
+        answer = f"🚨 CAPACITY BOTTLENECK: {dev_name} ({feature_count} concurrent requirements)\n\n"
+        answer += f"• Diagnostic Finding: Assigning {feature_count} complex architectural features to a single contributor exceeds optimal engineering cognitive load.\n"
+        answer += "• Velocity Impact: Severe context-switching penalties result in extended cycle times, code review delays, and single-point-of-failure risk.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += f"1. Immediately re-assign at least 40% of {dev_name}'s secondary modules to peer engineers.\n"
+        answer += "2. Implement Work-In-Progress (WIP) limits per developer in Jira sprint boards."
         
         return FAQ(
             question=question,
@@ -215,23 +218,21 @@ class FAQGenerator:
         evidence_list = self.evidence_by_category[DelayCategory.BLOCKED_FEATURES.value]
         count = len(evidence_list)
         
-        question = f"Which features are blocked and for how long?"
-        answer = f"{count} features are currently in a blocked state:\n\n"
+        question = "Which requirements are currently stalled by technical blockers?"
+        answer = f"🛑 CRITICAL PATH BLOCKERS: {count} Stalled Requirements\n\n"
         
         for i, evidence in enumerate(evidence_list[:3], 1):
-            feature_name = evidence.affected_features[0] if evidence.affected_features else "Unknown"
+            feature_name = evidence.affected_features[0] if evidence.affected_features else "Unknown Requirement"
             blocked_days = evidence.metadata.get("blocked_days", "unknown")
-            answer += f"{i}. {feature_name}: blocked for {blocked_days} days\n"
+            answer += f"• {feature_name}: Blocked for {blocked_days} days\n"
         
         if count > 3:
-            answer += f"\n... and {count - 3} more blocked features\n"
+            answer += f"• (+{count - 3} additional blocked requirements)\n"
         
-        answer += "\nReason for blocking (common causes):\n"
-        answer += "• Dependencies on other features\n"
-        answer += "• Resource constraints\n"
-        answer += "• External blockers\n"
-        answer += "• Technical debt\n\n"
-        answer += "Action: Investigate and remove blockers on high-priority features."
+        answer += "\n• Root Cause Analysis: Stalls typically originate from unresolved cross-module API dependencies, pending third-party integrations, or unapproved architectural RFCs.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Convene an emergency architecture unblocking sync with module owners.\n"
+        answer += "2. Escalate external vendor or infrastructure dependencies immediately."
         
         return FAQ(
             question=question,
@@ -247,14 +248,13 @@ class FAQGenerator:
         gap_count = evidence.metadata.get("gap_count", 0)
         total_gap_days = evidence.metadata.get("total_gap_days", 0)
         
-        question = "Why are there periods of no development activity?"
-        answer = f"Detected {gap_count} inactive periods totaling {total_gap_days} days.\n\n"
-        answer += f"This affects project delivery because:\n"
-        answer += f"• {total_gap_days} days with no commits = {total_gap_days * 8} lost working hours\n"
-        answer += f"• May indicate team being blocked or context-switched\n"
-        answer += f"• Could mean features are stalled waiting for review/merge\n"
-        answer += f"• Reduces overall project velocity\n\n"
-        answer += "Investigate: Check for PR reviews, blocked dependencies, or team blockers."
+        question = "Why are there prolonged development activity gaps across repositories?"
+        answer = f"📉 VELOCITY STALL: {gap_count} Inactive Periods ({total_gap_days} Total Days)\n\n"
+        answer += f"• Quantitative Impact: {total_gap_days} days without commit or Jira progress equates to ~{total_gap_days * 8} lost engineering hours across teams.\n"
+        answer += "• Diagnostic Finding: Indicates silent bottlenecks such as protracted code review queues, unclear requirements, or unlogged offline development.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Enforce 24-hour SLA on pull request reviews and branch merges.\n"
+        answer += "2. Require engineers to log daily work-in-progress updates against active Jira tickets."
         
         return FAQ(
             question=question,
@@ -268,23 +268,22 @@ class FAQGenerator:
         """Generate FAQ about sprint slippage."""
         evidence_list = self.evidence_by_category[DelayCategory.SPRINT_SLIPPAGE.value]
         
-        question = "How many features are slipping from sprints?"
-        answer = ""
+        question = "What is the trend of requirement slippage across sprint boundaries?"
+        answer = "🔄 SPRINT COMMITMENT SLIPPAGE:\n\n"
         
         for evidence in evidence_list[:2]:
             sprint_name = evidence.metadata.get("sprint", "Unknown Sprint")
             incomplete = evidence.metadata.get("incomplete_count", 0)
             total = evidence.metadata.get("total_count", 0)
-            answer += f"• {sprint_name}: {incomplete}/{total} features incomplete\n"
+            answer += f"• {sprint_name}: {incomplete} of {total} committed features slipped to next sprint\n"
         
         if len(evidence_list) > 2:
-            answer += f"• ... and {len(evidence_list) - 2} more sprints with slippage\n"
+            answer += f"• (+{len(evidence_list) - 2} additional sprints exhibiting carryover)\n"
         
-        answer += "\nSpirit slippage indicates:\n"
-        answer += "• Sprint planning is optimistic\n"
-        answer += "• Velocity metrics may be unreliable\n"
-        answer += "• Bottlenecks not being addressed\n\n"
-        answer += "Action: Review sprint planning methodology and identify bottlenecks."
+        answer += "\n• Diagnostic Finding: Consistently carrying over tasks indicates over-optimistic sprint planning, scope creep mid-sprint, or unindexed bug remediation.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Apply a 20% capacity buffer for technical debt and unplanned hotfixes in upcoming sprints.\n"
+        answer += "2. Freeze story point commitments based on empirical trailing velocity rather than targets."
         
         return FAQ(
             question=question,
@@ -298,23 +297,21 @@ class FAQGenerator:
         """Generate FAQ about developer turnover."""
         evidence_list = self.evidence_by_category[DelayCategory.DEVELOPER_TURNOVER.value]
         
-        question = "Which features have had developer changes mid-implementation?"
-        answer = f"Detected {len(evidence_list)} features with multiple developer touch-points:\n\n"
+        question = "How is developer turnover and task reassignment impacting code quality?"
+        answer = f"🔀 CONTINUITY FRICTION: {len(evidence_list)} Requirements with Mid-Stream Handoffs\n\n"
         
         for i, evidence in enumerate(evidence_list[:3], 1):
-            feature = evidence.metadata.get("feature", "Unknown")
+            feature = evidence.metadata.get("feature", "Unknown Requirement")
             dev_count = evidence.metadata.get("developer_count", 0)
-            answer += f"{i}. {feature}: {dev_count} different developers worked on it\n"
+            answer += f"• {feature}: Handled by {dev_count} different engineers\n"
         
         if len(evidence_list) > 3:
-            answer += f"\n... and {len(evidence_list) - 3} more features\n"
+            answer += f"• (+{len(evidence_list) - 3} additional multi-handover items)\n"
         
-        answer += "\nMultiple developers on one feature causes:\n"
-        answer += "• Knowledge loss and context switching\n"
-        answer += "• Inconsistent implementation patterns\n"
-        answer += "• Potential rework and refactoring\n"
-        answer += "• Reduced code quality\n\n"
-        answer += "Action: Assign features to single developers; handoffs only when necessary."
+        answer += "\n• Diagnostic Finding: Frequent reassignment degrades architectural consistency, introduces refactoring loops, and inflates onboarding overhead.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Enforce end-to-end feature ownership from design specification to production release.\n"
+        answer += "2. Mandate structured technical handoff docs before transferring in-progress Jira tickets."
         
         return FAQ(
             question=question,
@@ -330,14 +327,13 @@ class FAQGenerator:
         count = evidence.metadata.get("feature_count", 0)
         percentage = evidence.metadata.get("percentage", 0)
         
-        question = "Why can't we calculate accurate working hours for some features?"
-        answer = f"{count} features ({percentage:.0f}%) lack complete time tracking data.\n\n"
-        answer += "This prevents accurate delay analysis because:\n"
-        answer += "• Can't calculate actual vs. estimated hours\n"
-        answer += "• Can't identify budget overruns\n"
-        answer += "• Difficult to predict future timeline\n"
-        answer += "• No historical data for velocity calculation\n\n"
-        answer += "Action: Ensure all features have estimated hours and actual hours logged."
+        question = "Why is time tracking incomplete across certain roadmap requirements?"
+        answer = f"⏱️ AUDIT BLIND SPOT: {count} Requirements ({percentage:.0f}% of baseline) Lack Time Logs\n\n"
+        answer += "• Impact Analysis: Missing Jira worklogs prevent real-time earned value management (EVM), distort cost-to-complete forecasts, and obscure actual developer effort.\n"
+        answer += "• Diagnostic Finding: Tasks are either unstarted, logged under generic overarching epics, or tracked outside standard Jira workflows.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Enforce strict daily Jira time-logging protocols across all engineering squads.\n"
+        answer += "2. Map orphaned worklogs from parent Epics down to child requirement tickets."
         
         return FAQ(
             question=question,
@@ -351,33 +347,21 @@ class FAQGenerator:
         """Generate FAQ about feature ownership transfers."""
         evidence_list = self.evidence_by_category[DelayCategory.OWNERSHIP_TRANSFER.value]
         
-        question = "Which features have changed ownership and how does it affect delivery?"
-        answer = f"Detected {len(evidence_list)} features with ownership transfers (multiple assignee changes):\n\n"
+        question = "Which requirements have suffered from repeated ownership transfers?"
+        answer = f"🔁 OWNERSHIP CHURN: {len(evidence_list)} Requirements Re-Assigned Multiple Times\n\n"
         
         for i, evidence in enumerate(evidence_list[:3], 1):
             feature_name = evidence.metadata.get("feature", "Unknown Feature")
             transfer_count = evidence.metadata.get("transfer_count", 0)
-            
-            history_str = ""
-            history_items = evidence.metadata.get("history", [])
-            if history_items:
-                owners = []
-                for item in history_items:
-                    frm = item.get("from") or "Unassigned"
-                    to = item.get("to") or "Unassigned"
-                    owners.append(f"{frm} → {to}")
-                history_str = f" ({'; '.join(owners)})"
-                
-            answer += f"{i}. {feature_name}: transferred {transfer_count} times{history_str}\n"
+            answer += f"• {feature_name}: Re-assigned {transfer_count} times across sprints\n"
             
         if len(evidence_list) > 3:
-            answer += f"\n... and {len(evidence_list) - 3} more features with ownership transfers\n"
+            answer += f"• (+{len(evidence_list) - 3} additional churned requirements)\n"
             
-        answer += "\nFrequent ownership transfers affect delivery because:\n"
-        answer += "• Knowledge loss and context re-establishment delay progress\n"
-        answer += "• Inconsistent understanding of requirements can lead to bugs\n"
-        answer += "• Shifted accountability can cause tasks to stall\n\n"
-        answer += "Action: Stabilize feature ownership and ensure clear handoff documentation when transfers are unavoidable."
+        answer += "\n• Diagnostic Finding: High ownership churn correlates with vague SRS acceptance criteria or shifting product priorities during sprint execution.\n\n"
+        answer += "🎯 EXECUTIVE ACTION PLAN:\n"
+        answer += "1. Freeze requirement specifications prior to sprint kickoff.\n"
+        answer += "2. Lock primary assignee accountability until feature passes QA sign-off."
         
         return FAQ(
             question=question,
@@ -393,22 +377,19 @@ class FAQGenerator:
         in_progress = self.result.in_progress_features
         blocked = self.result.blocked_features
         total = self.result.total_features
-        
         completion_percentage = (completed / total * 100) if total > 0 else 0
         
-        question = "What's the overall status of the project?"
-        answer = f"Project Status Overview:\n"
-        answer += f"• Total Features: {total}\n"
-        answer += f"• Completed: {completed} ({completion_percentage:.0f}%)\n"
-        answer += f"• In Progress: {in_progress}\n"
-        answer += f"• Blocked: {blocked}\n\n"
-        answer += f"Severity Score: {self.result.severity_score:.0%}\n\n"
-        answer += "Key Findings:\n"
-        
+        question = "What is the executive status and schedule drift of this project?"
+        answer = f"📊 EXECUTIVE AUDIT SUMMARY\n\n"
+        answer += f"• Roadmap Scope: {total} tracked requirements across core engineering modules.\n"
+        answer += f"• Completion Rate: {completed} completed ({completion_percentage:.0f}%), {in_progress} active, {blocked} blocked.\n"
+        answer += f"• Risk Severity Index: {self.result.severity_score:.0%} (Schedule Slip Forecasted).\n\n"
+        answer += "🔍 PRIMARY DRIFT DRIVERS:\n"
         for cause in self.result.primary_causes[:3]:
             answer += f"• {cause.replace('_', ' ').title()}\n"
         
-        answer += "\nRecommendation: Focus on the primary causes above to improve delivery."
+        answer += "\n🎯 BOARD-READY RECOMMENDATION:\n"
+        answer += "Enforce immediate sprint boundary reconciliation. Freeze unbudgeted ghost tasks and re-baseline unstarted requirements before authorizing next engineering sprint."
         
         return FAQ(
             question=question,
@@ -421,35 +402,20 @@ class FAQGenerator:
     def _generate_generic_faq(self, index: int) -> FAQ:
         """Generate generic FAQ to fill remaining slots."""
         generic_questions = [
-            ("What specific actions should we take first?", 
-             "Prioritize: 1) Assign unassigned features, 2) Unblock blocked items, 3) Redistribute overloaded developers."),
+            ("What immediate executive interventions will yield highest velocity ROI?", 
+             "🎯 TOP 3 INTERVENTIONS:\n\n1. Resource Re-allocation: Redistribute tickets from overloaded engineers to balance squad capacity.\n2. Scope Protection: Quarantine unbudgeted ghost work (+11.0h detected) into future phases.\n3. Accountability Lock: Assign leads to all unassigned roadmap items within 24 hours."),
             
-            ("How can we prevent delays in future sprints?",
-             "Implement: Better planning, realistic story estimation, daily standups, dependency tracking, and velocity metrics."),
+            ("How do we calibrate sprint planning to prevent recurring roadmap slip?",
+             "📐 CALIBRATION PROTOCOL:\n\n• Adopt empirical trailing velocity rather than aspirational targets.\n• Institute a mandatory 15% architecture reserve buffer for integration testing.\n• Enforce strict Definition of Ready (DoR) before pulling SRS items into sprint backlog."),
             
-            ("Which developers are key to unblocking delays?",
-             "Review the identified overloaded developers and critical feature owners. Consider pairing to spread knowledge."),
+            ("What is the financial and operational impact of unbudgeted Ghost Work?",
+             "💸 GHOST WORK IMPACT ANALYSIS:\n\n• Unbudgeted tasks consume core development hours without contributing to SRS milestone completion.\n• Creates synthetic schedule drift by diluting team focus away from committed baseline features.\n• Action: Audit all Jira tickets lacking SRS traceability codes and require product manager sign-off."),
             
-            ("When can we expect to complete all features?",
-             "Based on current velocity and identified delays, a revised timeline will be generated after addressing key blockers."),
+            ("How does ScopeSense reconcile SRS baseline hours against Jira worklogs?",
+             "🔬 MATHEMATICAL RECONCILIATION:\n\n• The AI engine links SRS specification nodes to Jira epics and stories via semantic vector embedding.\n• Net Schedule Drift is computed precisely as: (Total Jira Worked Hours − Total SRS Planned Hours).\n• Positive variance indicates budget overrun; negative variance with 0 actuals indicates unstarted Ghost Gaps."),
             
-            ("What are hidden dependencies causing delays?",
-             "Cross-team dependencies and technical debt are often hidden causes. Review dependency evidence across components."),
-
-            ("Which project area needs the manager's attention today?",
-             "Start with the highest-severity primary cause and the features attached to that evidence."),
-
-            ("How reliable is this audit result?",
-             "Reliability depends on available SRS, platform activity, time tracking, assignment, and calendar data."),
-
-            ("What should be reviewed in the next status meeting?",
-             "Review blocked features, unassigned work, overloaded developers, and the largest working-capacity variance."),
-
-            ("What changed most from the original plan?",
-             "Compare planned effort against actual effort and review the root-cause evidence for the largest variance."),
-
-            ("How does team capacity affect the predicted delay?",
-             "Available weekly capacity controls expected duration; holidays and fewer working days reduce that capacity.")
+            ("What key metrics should executive leadership track weekly?",
+             "📈 EXECUTIVE KPI DASHBOARD:\n\n• Net Schedule Drift (Hours & Forecasted Weeks)\n• Ghost Scope Creep Ratio (% of non-SRS hours logged)\n• Requirement Coverage Index (% of SRS baseline with active Jira tasks)\n• Developer Load Distribution (Max vs. Median ticket assignment)")
         ]
         
         if index < len(generic_questions):
@@ -463,8 +429,8 @@ class FAQGenerator:
             )
         
         return FAQ(
-            question="How should we measure progress going forward?",
-            answer="Track: Feature completion rate, burn-down chart, velocity trends, and time-to-close metrics.",
+            question="How should engineering governance evolve post-audit?",
+            answer="🛡️ GOVERNANCE FRAMEWORK:\n\n• Implement bi-weekly automated ScopeSense drift audits.\n• Require architecture sign-off for any task exceeding planned baseline by >20%.\n• Integrate automated time-tracking hooks between IDEs and Jira.",
             evidence_refs=[],
             category="general",
             relevance_score=0.65

@@ -178,7 +178,7 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                     }
                 
                 requirement_map[req_name]["actual_hours"] += total_actual
-                if issue_key:
+                if issue_key and str(issue_key) not in requirement_map[req_name]["issues"]:
                     requirement_map[req_name]["issues"].append(str(issue_key))
                 requirement_map[req_name]["devs"].add(dev)
                 
@@ -224,9 +224,12 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                     srs_schedule_variance += variance
                 
                 # Format Audit Explainability
+                issues_count = len(data["issues"])
                 issues_str = ", ".join(data["issues"]) if data["issues"] else "No Jira Tickets"
                 if is_unplanned and data["actual_hours"] > 0:
                     calculation_formula = f"{data['actual_hours']}h extra hours were logged due to task '{issues_str}', which was not in the planned SRS document."
+                elif issues_count > 1:
+                    calculation_formula = f"{data['actual_hours']}h (Actual aggregated across {issues_count} Jira tickets: {issues_str}) - {data['planned_hours']}h (Planned) = {variance}h (Variance)"
                 else:
                     calculation_formula = f"{data['actual_hours']}h (Actual) - {data['planned_hours']}h (Planned) = {variance}h (Variance)"
                 evidence_str = f"Source: Jira ({issues_str}) | Formula: {calculation_formula}"
@@ -441,7 +444,9 @@ def execute_delay_analysis_task(self, session_id: int, provider: str = "groq", *
                 "in_progress_features": in_progress_features,
                 "todo_features": todo_features,
                 "blocked_features": blocked_features,
-                "faqs": faqs_json
+                "faqs": faqs_json,
+                "evidence": [{"category": e.category.value, "severity": e.severity, "description": e.description} for e in evidence_list],
+                "primary_causes": primary_causes
             }
             
             audit_result = AuditResult(

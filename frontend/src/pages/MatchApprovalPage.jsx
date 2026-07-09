@@ -99,14 +99,32 @@ function MatchApprovalPage() {
     });
   });
 
-  const handleApproveAll = () => {
+  const [approvingAll, setApprovingAll] = useState(false);
+
+  const handleApproveAll = async () => {
     const updated = matches.map(m => {
-       if (m.confidence_score >= 0.7 && m.feature_id >= 0) {
+       if (Number(m.confidence_score) >= 0.7 && Number(m.feature_id) >= 0) {
            return { ...m, approval_status: "APPROVED" };
        }
        return m;
     });
     setMatches(updated);
+
+    try {
+       setApprovingAll(true);
+       setError(null);
+       const payload = updated.map(m => ({
+         srs_node_id: m.srs_node_id,
+         feature_id: m.feature_id,
+         confidence_score: m.confidence_score,
+         approval_status: m.approval_status
+       }));
+       await saveMatchesList(payload);
+    } catch (err) {
+       console.error("Failed to auto-save approved matches", err);
+    } finally {
+       setApprovingAll(false);
+    }
   };
 
   const kpis = useMemo(() => {
@@ -123,10 +141,13 @@ function MatchApprovalPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Step 7 · Audit workflow"
         title="Approve semantic matches."
         lede="ScopeSense proposes how each planned requirement maps to delivered work. Approve, adjust, or reject."
-        primary={matches.length > 0 && !loadingMatches && !sessionLoading ? { label: "Approve all confident", onClick: handleApproveAll } : undefined}
+        primary={matches.length > 0 && !loadingMatches && !sessionLoading ? { 
+          label: approvingAll ? "Saving approvals..." : "Approve all confident", 
+          onClick: handleApproveAll,
+          disabled: approvingAll
+        } : undefined}
       />
 
       <PageBody>

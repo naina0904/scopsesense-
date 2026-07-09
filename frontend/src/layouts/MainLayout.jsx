@@ -1,5 +1,5 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
-import { Check, ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 import { useAudit } from "../context/AuditContext";
@@ -51,15 +51,15 @@ function WorkflowProgress({ pathname }) {
             const cur = i === currentIdx;
             return (
               <Link key={s.to} to={s.to} className="flex items-center gap-2 shrink-0 group">
-                <div className={`size-6 rounded-full grid place-items-center text-[10px] font-medium border transition ${
-                  done ? "bg-success/40 border-success text-ink group-hover:bg-success/60" :
-                  cur ? "bg-ink text-background border-ink" :
+                <div className={`size-6 rounded-full grid place-items-center text-[10px] font-bold border transition ${
+                  done ? "bg-success/20 border-success text-success group-hover:bg-success/30" :
+                  cur ? "bg-ink text-background border-ink shadow-sm" :
                   "bg-card border-hairline text-subtext group-hover:border-ink/40"
                 }`}>
-                  {done ? <Check className="size-3" /> : i + 1}
+                  {done ? <Check className="size-3.5 stroke-[2.5]" /> : i + 1}
                 </div>
                 <span className={`text-xs transition ${cur ? "text-ink font-bold" : "text-subtext group-hover:text-ink"}`}>{s.label}</span>
-                {i < STEPS.length - 1 && <div className={`w-6 h-px ${done ? "bg-success" : "bg-hairline"}`} />}
+                {i < STEPS.length - 1 && <div className={`w-6 h-0.5 rounded-full transition ${done ? "bg-success" : "bg-hairline"}`} />}
               </Link>
             );
           })}

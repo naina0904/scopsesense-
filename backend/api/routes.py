@@ -79,6 +79,28 @@ def get_audit_service():
     return audit_service
 
 # =================================================
+# CHAT ENDPOINT
+# =================================================
+
+@router.post("/chat")
+async def project_chat_endpoint(request: ChatRequest, user: TokenData = Depends(get_current_user)):
+    try:
+        chat = ProjectChat(provider=request.provider)
+        result = chat.ask(request.question)
+        return {
+            "success": True,
+            "answer": result.get("answer", "No response generated."),
+            "question": request.question,
+            "context_used": result.get("context_used", 0)
+        }
+    except Exception as e:
+        import traceback
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in /chat endpoint: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+# =================================================
 # ROOT
 # =================================================
 

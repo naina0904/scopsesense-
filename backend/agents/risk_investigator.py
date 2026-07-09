@@ -14,7 +14,9 @@ class RiskInvestigatorAgent:
 
         dependencies,
 
-        architecture_scores
+        architecture_scores,
+
+        semantic_matches=None
     ):
 
         investigations = []
@@ -114,5 +116,21 @@ class RiskInvestigatorAgent:
                 "root_causes":
                     root_causes
             })
+
+        # -----------------------------------
+        # SEMANTIC DRIFT & ROADMAP GAPS (PHASE 3 AGENTIC REASONING)
+        # -----------------------------------
+        if semantic_matches:
+            unmapped_count = sum(1 for m in semantic_matches if not m.get("issue_key") or m.get("confidence", 1.0) < 0.70)
+            if unmapped_count > 0:
+                investigations.append({
+                    "risk": "Semantic Roadmap Drift",
+                    "severity": "HIGH" if unmapped_count > 3 else "MEDIUM",
+                    "message": f"Detected {unmapped_count} SRS requirements with missing or low-confidence Jira mappings.",
+                    "root_causes": [
+                        "Divergent naming conventions between BA specification (SRS) and engineering task tracking (Jira).",
+                        "Unbudgeted engineering effort or future roadmap items lacking active sprint allocation."
+                    ]
+                })
 
         return investigations
