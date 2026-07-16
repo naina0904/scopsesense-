@@ -4,6 +4,7 @@ import DelayAnalysisResults from "../components/DelayAnalysisResults";
 import AIChatPanel from "../components/AIChatPanel";
 import { useAudit } from "../context/AuditContext";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
+import { StageGuideCard } from "../components/ui/StageGuideCard";
 import { Loader2, HelpCircle, Sparkles, ArrowLeft, ChevronDown, ChevronUp, X, RotateCcw } from "lucide-react";
 
 function ResultsDashboard() {
@@ -75,6 +76,12 @@ function ResultsDashboard() {
             </div>
           </div>
         )}
+
+        <StageGuideCard
+          sectionId="stage-7-results"
+          title="Stage 7 Guide: Understanding Executive Results & Row Intelligence"
+          description="Explore EVM health score weights, Forecasted Slip formulas, Ghost Scope Creep tracking, and how to use 2-Sentence Row Intelligence."
+        />
 
         <DelayAnalysisResults 
           results={auditResult} 

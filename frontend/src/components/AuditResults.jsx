@@ -19,6 +19,7 @@ import VarianceChart from "./VarianceChart";
 import OwnershipTimeline from "./OwnershipTimeline";
 import LowConfidenceMatchList from "./LowConfidenceMatchList";
 import RootCausePanel from "./RootCausePanel";
+import HelpTooltip from "./HelpTooltip";
 
 
 function AuditResults({
@@ -84,7 +85,7 @@ function AuditResults({
                             "
                             >
 
-                                Health Score
+                                <HelpTooltip termKey="Project Health Score">Health Score</HelpTooltip>
 
                             </p>
 
@@ -142,7 +143,7 @@ function AuditResults({
                             "
                             >
 
-                                Semantic Confidence
+                                <HelpTooltip termKey="Confidence Score">Semantic Confidence</HelpTooltip>
 
                             </p>
 

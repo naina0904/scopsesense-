@@ -3,9 +3,11 @@ import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, Save, ArrowRight, Loader2, X, Check, ArrowLeft } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
+import HelpTooltip from "../components/HelpTooltip";
+import { StageGuideCard } from "../components/ui/StageGuideCard";
 
 function MatchApprovalPage() {
-  const { auditSession, fetchActiveSession, getMatchesList, getActualFeatures, saveMatchesList, sessionLoading, error, setError, registerStepAction } = useAudit();
+  const { auditSession, fetchActiveSession, getMatchesList, getActualFeatures, saveMatchesList, sessionLoading, error, setError, registerStepAction, openHelp } = useAudit();
   const navigate = useNavigate();
 
   const [matches, setMatches] = useState([]);
@@ -227,7 +229,9 @@ function MatchApprovalPage() {
                       {item.feature_id >= 0 ? (
                         <>
                           <div className="font-display text-2xl text-ink">{(item.confidence_score * 100).toFixed(0)}%</div>
-                          <div className="text-[10px] text-subtext">confidence</div>
+                          <div className="text-[10px] text-subtext">
+                            <HelpTooltip termKey="Confidence Score">confidence</HelpTooltip>
+                          </div>
                         </>
                       ) : (
                          <div className="font-display text-xl text-subtext">-</div>
@@ -263,10 +267,23 @@ function MatchApprovalPage() {
                 );
               })}
               
-              {matches.length === 0 && (
-                <div className="p-8 text-center text-subtext border border-hairline rounded-2xl bg-card">
-                   No matches found. Ensure the dataset is merged.
+              {matches.length === 0 ? (
+                <div className="p-12 text-center text-subtext border border-hairline rounded-2xl bg-card space-y-4">
+                   <p className="text-xl font-bold text-ink">No semantic matches found yet.</p>
+                   <p className="text-sm text-subtext">Ensure your dataset is normalized before AI semantic matching runs.</p>
+                   <StageGuideCard
+                     sectionId="stage-5-semantic-matches"
+                     title="📖 Complete Stage 5 Guide & Semantic Match Approval Walkthrough"
+                     description="Learn how the vector embedding engine links planned requirements to GitHub/Jira tasks."
+                   />
                 </div>
+              ) : (
+                <StageGuideCard
+                  sectionId="stage-5-semantic-matches"
+                  title="📖 Complete Stage 5 Guide & Semantic Match Approval Walkthrough"
+                  description="Learn how the vector embedding engine links planned requirements to GitHub/Jira tasks."
+                  className="mt-6"
+                />
               )}
             </div>
 

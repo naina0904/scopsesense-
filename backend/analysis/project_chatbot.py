@@ -12,6 +12,7 @@ from backend.analysis.semantic_delay_analyzer import DelayAnalysisResult
 from backend.integrations.core.unified_schema import PlatformData
 from backend.llm.manager import LLMManager
 from backend.semantic.embeddings import EmbeddingEngine
+from backend.chat.user_guide_context import get_user_guide_context
 
 logger = logging.getLogger(__name__)
 
@@ -206,25 +207,29 @@ PRIMARY DELAY FACTORS
         """
         context = self.build_context_summary()
         relevant_context = self._retrieve_relevant_context(question)
+        user_guide_knowledge = get_user_guide_context()
 
         prompt = f"""
-You are an expert project manager analyzing a software project's delays and performance.
+You are an expert project manager and ScopeSense AI copilot analyzing a software project's delays and performance.
 
-Relevant Evidence and Features:
+{user_guide_knowledge}
+
+Relevant Evidence and Features from Project:
 {relevant_context}
 
+Project Summary Context:
 {context}
 
 User Question: {question}
 
-CRITICAL RULES FOR INTERPRETATION:
+CRITICAL RULES FOR INTERPRETATION & ANSWERS:
 1. If "Actual Hours" is 0 or no time is logged, it does NOT mean a ticket/feature doesn't exist. It usually means the developer hasn't logged their time yet.
 2. A positive variance means overrun. A negative variance means under-budget or unstarted.
 3. Do not assume a ticket is missing if it appears in the "Evidence" or "Features" lists.
+4. When answering conceptual questions (e.g. how metrics like EVM/SPI/Slip are calculated, or what troubleshooting actions to take), explicitly cite the formulas and thresholds from the canonical User Guide section above.
 
-Provide a concrete, evidence-based answer drawing from the analysis context above.
-Focus on: specific features, contributors, timeline data, and actionable insights.
-Avoid generic advice - be specific to this project's situation.
+Provide a concrete, evidence-based answer drawing from the User Guide definitions and analysis context above.
+Focus on: specific features, formulas, contributors, timeline data, and actionable insights.
 """
         
         # Get LLM response

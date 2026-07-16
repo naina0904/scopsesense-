@@ -1,3 +1,6 @@
+import React from "react";
+import HelpTooltip from "./HelpTooltip";
+
 function HealthScoreCard() {
 
     return (
@@ -11,8 +14,8 @@ function HealthScoreCard() {
             h-full
         ">
 
-            <h2 className="text-xl font-semibold mb-6">
-                Project Health
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                <HelpTooltip termKey="Project Health Score">Project Health</HelpTooltip>
             </h2>
 
             <div className="flex items-center justify-center h-56">

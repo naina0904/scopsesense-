@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAudit } from "../context/AuditContext";
 import { PlayCircle, Sparkles, Check, AlertTriangle, RefreshCw, XCircle, ArrowLeft, ArrowRight, Cpu, Zap, Brain, ShieldCheck } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
+import { StageGuideCard } from "../components/ui/StageGuideCard";
 
 function AuditPage() {
-  const { auditResult, loading, progress, error, setError, runDelayAnalysis, auditSession, fetchActiveSession, registerStepAction } = useAudit();
+  const { auditResult, loading, progress, error, setError, runDelayAnalysis, auditSession, fetchActiveSession, registerStepAction, openHelp } = useAudit();
   const navigate = useNavigate();
   const [provider, setProvider] = useState("groq");
   const [executing, setExecuting] = useState(false);
@@ -220,11 +221,12 @@ function AuditPage() {
                     <PlayCircle className="size-6" /> Execute AI Forensic Audit
                   </button>
                 )}
-                {!allStepsApproved && !loading && (
-                  <p className="text-center text-xs text-risk mt-3">
-                    Please approve previous workflow steps to enable execution.
-                  </p>
-                )}
+                <StageGuideCard
+                  sectionId="stage-6-execute-audit"
+                  title="📖 Complete Stage 6 Guide & Multi-Agent Inference Walkthrough"
+                  description="See how Groq Llama-3 and Gemini engines analyze risks, calculate EVM metrics, and infer root causes."
+                  className="mt-6"
+                />
               </div>
             </div>
           </div>

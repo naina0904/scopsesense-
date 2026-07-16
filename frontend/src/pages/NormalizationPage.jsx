@@ -3,9 +3,10 @@ import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, Save, ArrowRight, Loader2, ArrowLeft } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
+import { StageGuideCard } from "../components/ui/StageGuideCard";
 
 function NormalizationPage() {
-  const { auditSession, fetchActiveSession, getNormalizationData, saveNormalization, sessionLoading, error, setError, registerStepAction } = useAudit();
+  const { auditSession, fetchActiveSession, getNormalizationData, saveNormalization, sessionLoading, error, setError, registerStepAction, openHelp } = useAudit();
   const navigate = useNavigate();
 
   const [normData, setNormData] = useState([]);
@@ -202,7 +203,15 @@ function NormalizationPage() {
                     );
                   })}
                   {normData.length === 0 && (
-                     <div className="p-8 text-center text-subtext">No data to display. Please complete earlier steps.</div>
+                     <div className="p-12 text-center text-subtext space-y-4">
+                       <p className="text-xl font-bold text-ink">No normalized data to display.</p>
+                       <p className="text-sm text-subtext">Please ensure Table 1 and Table 2 are approved before normalizing.</p>
+                       <StageGuideCard
+                         sectionId="stage-4-normalization"
+                         title="📖 Complete Stage 4 Guide & Task Normalization Walkthrough"
+                         description="See how commits, PRs, and tickets are standardized into the UnifiedTaskSchema."
+                       />
+                     </div>
                   )}
                 </div>
               </div>

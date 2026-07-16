@@ -1,8 +1,10 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Info } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
+import HelpDrawer from "../components/HelpDrawer";
 import { useAudit } from "../context/AuditContext";
+import { STAGE_HELP_MAP } from "../data/userGuideData";
 
 const STEPS = [
   { to: "/upload-srs", label: "Upload SRS" },
@@ -16,7 +18,7 @@ const STEPS = [
 
 function WorkflowProgress({ pathname }) {
   const navigate = useNavigate();
-  const { stepActionRef } = useAudit();
+  const { stepActionRef, openHelp } = useAudit();
   const currentIdx = STEPS.findIndex(s => pathname === s.to || pathname.startsWith(s.to));
   const active = currentIdx >= 0;
   if (!active) return null;
@@ -50,17 +52,33 @@ function WorkflowProgress({ pathname }) {
             const done = i < currentIdx;
             const cur = i === currentIdx;
             return (
-              <Link key={s.to} to={s.to} className="flex items-center gap-2 shrink-0 group">
-                <div className={`size-6 rounded-full grid place-items-center text-[10px] font-bold border transition ${
-                  done ? "bg-success/20 border-success text-success group-hover:bg-success/30" :
-                  cur ? "bg-ink text-background border-ink shadow-sm" :
-                  "bg-card border-hairline text-subtext group-hover:border-ink/40"
-                }`}>
-                  {done ? <Check className="size-3.5 stroke-[2.5]" /> : i + 1}
-                </div>
-                <span className={`text-xs transition ${cur ? "text-ink font-bold" : "text-subtext group-hover:text-ink"}`}>{s.label}</span>
+              <div key={s.to} className="flex items-center gap-2 shrink-0 group">
+                <Link to={s.to} className="flex items-center gap-2 shrink-0">
+                  <div className={`size-6 rounded-full grid place-items-center text-[10px] font-bold border transition ${
+                    done ? "bg-success/20 border-success text-success group-hover:bg-success/30" :
+                    cur ? "bg-ink text-background border-ink shadow-sm" :
+                    "bg-card border-hairline text-subtext group-hover:border-ink/40"
+                  }`}>
+                    {done ? <Check className="size-3.5 stroke-[2.5]" /> : i + 1}
+                  </div>
+                  <span className={`text-xs transition ${cur ? "text-ink font-bold" : "text-subtext group-hover:text-ink"}`}>{s.label}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openHelp(STAGE_HELP_MAP[s.to] || "quick-start");
+                  }}
+                  className={`size-4 rounded-full grid place-items-center transition shrink-0 cursor-pointer ${
+                    cur ? "bg-info/20 text-info hover:bg-info/30" : "bg-card text-subtext hover:text-info hover:bg-info/10 opacity-70 hover:opacity-100"
+                  }`}
+                  title={`Open user guide for ${s.label}`}
+                >
+                  <Info className="size-2.5" />
+                </button>
                 {i < STEPS.length - 1 && <div className={`w-6 h-0.5 rounded-full transition ${done ? "bg-success" : "bg-hairline"}`} />}
-              </Link>
+              </div>
             );
           })}
         </div>
@@ -115,6 +133,7 @@ function MainLayout({ children }) {
                 <main className="flex-1 overflow-auto">
                     {children}
                 </main>
+                <HelpDrawer />
             </div>
         </div>
     );

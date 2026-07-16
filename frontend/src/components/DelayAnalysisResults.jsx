@@ -4,6 +4,7 @@ import { askDelayAnalysisChat } from "../api/chat";
 import { X, Send, AlertTriangle, RefreshCw, Sparkles, HelpCircle, User, Bot, ChevronDown, ChevronUp, Users, Layers } from "lucide-react";
 import toast from "react-hot-toast";
 import TemporalDriftChart from "./TemporalDriftChart";
+import HelpTooltip from "./HelpTooltip";
 
 function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
   const { fetchRowIntelligence, showDeveloperPerformance, setShowDeveloperPerformance } = useAudit();
@@ -173,7 +174,7 @@ function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
 
               <div className="p-5 flex flex-col justify-between">
                 <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
-                  <span>Remaining Workload</span>
+                  <HelpTooltip termKey="Remaining Effort">Remaining Workload</HelpTooltip>
                   <span className="size-2 rounded-full bg-[#8b5cf6]" />
                 </div>
                 <div className="text-2xl font-display font-bold text-ink mt-2">
@@ -186,7 +187,7 @@ function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
 
               <div className="p-5 flex flex-col justify-between">
                 <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
-                  <span>Forecasted Slip</span>
+                  <HelpTooltip termKey="Forecasted Slip">Forecasted Slip</HelpTooltip>
                   <span className="size-2 rounded-full bg-amber-500" />
                 </div>
                 <div className="text-2xl font-display font-bold text-amber-600 dark:text-amber-400 mt-2">
@@ -199,7 +200,7 @@ function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
 
               <div className="p-5 flex flex-col justify-between">
                 <div className="text-[11px] font-bold text-subtext uppercase tracking-wider flex items-center justify-between">
-                  <span>Ghost Scope Creep</span>
+                  <HelpTooltip termKey="Ghost Scope Creep">Ghost Scope Creep</HelpTooltip>
                   <span className="size-2 rounded-full bg-rose-500" />
                 </div>
                 <div className="text-2xl font-display font-bold text-rose-600 dark:text-rose-400 mt-2">
@@ -219,7 +220,9 @@ function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
         <div className="bg-warning/20 border border-warning/30 rounded-3xl p-6 flex items-start gap-4 shadow-sm">
           <AlertTriangle className="size-6 text-warning mt-0.5" />
           <div>
-            <h3 className="text-warning font-bold text-lg">Stale Data Warning</h3>
+            <h3 className="text-warning font-bold text-lg flex items-center gap-2">
+              <HelpTooltip termKey="Stale Data Warning">Stale Data Warning</HelpTooltip>
+            </h3>
             <p className="text-ink/80 mt-1">
               The repository data is older than 24 hours. A freshness penalty modifier of <strong>{results.freshness_penalty_factor}</strong> has been applied to all severity scores.
             </p>
@@ -310,7 +313,9 @@ function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
                        <div className="col-span-1 text-center">Planned</div>
                        <div className="col-span-1 text-center">Actual</div>
                        <div className="col-span-1 text-center">Variance</div>
-                       <div className="col-span-2 text-center">Schedule Status</div>
+                       <div className="col-span-2 text-center">
+                         <HelpTooltip termKey="Schedule Status">Schedule Status</HelpTooltip>
+                       </div>
                        <div className="col-span-1 text-right">FAQs</div>
                      </div>
                      <div className="divide-y divide-hairline">
@@ -452,7 +457,9 @@ function DelayAnalysisResults({ results, faqs = [], onScrubFaq }) {
                        <div className="col-span-1 text-center">Planned</div>
                        <div className="col-span-1 text-center">Actual</div>
                        <div className="col-span-2 text-center">Variance</div>
-                       <div className="col-span-1 text-center">Efficiency</div>
+                       <div className="col-span-1 text-center">
+                         <HelpTooltip termKey="Developer Efficiency">Efficiency</HelpTooltip>
+                       </div>
                      </div>
                      <div className="divide-y divide-hairline">
                        {developerRows.map((row, index) => (

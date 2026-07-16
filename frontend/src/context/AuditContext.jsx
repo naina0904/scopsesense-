@@ -37,10 +37,20 @@ export const AuditProvider = ({ children }) => {
   const [taskId, setTaskId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
 
-  // UI toggle states for sidebar and modals
   const [showFaqs, setShowFaqs] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
   const [showDeveloperPerformance, setShowDeveloperPerformance] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [helpActiveSection, setHelpActiveSection] = useState("quick-start");
+
+  const openHelp = useCallback((sectionId = "quick-start") => {
+    setHelpActiveSection(sectionId);
+    setIsHelpOpen(true);
+  }, []);
+
+  const closeHelp = useCallback(() => {
+    setIsHelpOpen(false);
+  }, []);
 
   const pollRef = useRef(null);
   const stepActionRef = useRef({ onNext: null, onPrev: null });
@@ -364,10 +374,19 @@ export const AuditProvider = ({ children }) => {
   }, [sessionId]);
 
   useEffect(() => {
+    fetchActiveSession().catch(() => {});
+    getLatestDelayAnalysisResult()
+      .then((res) => {
+        if (res && (res.semantic_features || res.delay_analysis)) {
+          setAuditResult(res);
+          if (res.session_id) setSessionId(res.session_id);
+        }
+      })
+      .catch(() => {});
     return () => {
       stopPolling();
     };
-  }, []);
+  }, [fetchActiveSession]);
 
   const value = {
     auditResult,
@@ -411,6 +430,12 @@ export const AuditProvider = ({ children }) => {
     setShowCopilot,
     showDeveloperPerformance,
     setShowDeveloperPerformance,
+    isHelpOpen,
+    setIsHelpOpen,
+    helpActiveSection,
+    setHelpActiveSection,
+    openHelp,
+    closeHelp,
   };
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

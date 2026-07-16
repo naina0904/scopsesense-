@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
-import { Search, Bell, ChevronRight, X, Sparkles, AlertTriangle, CheckCircle, Clock, User, ShieldCheck, Zap, Layers, Users, FileText } from "lucide-react";
+import { Search, Bell, ChevronRight, X, Sparkles, AlertTriangle, CheckCircle, Clock, User, ShieldCheck, Zap, Layers, Users, FileText, HelpCircle } from "lucide-react";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { useAudit } from "../context/AuditContext";
 
@@ -37,7 +37,7 @@ function Breadcrumb({ pathname }) {
 function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { auditResult, setShowDeveloperPerformance } = useAudit();
+  const { auditResult, setShowDeveloperPerformance, openHelp } = useAudit();
   const [role, setRole] = useState(localStorage.getItem("scopesense_role") || "manager");
 
   // Search & Command Palette State
@@ -171,6 +171,16 @@ function Header() {
         <span className="text-subtext text-sm flex-1 select-none group-hover:text-ink transition-colors truncate">Search requirements, issues, people…</span>
         <span className="text-[10px] text-subtext font-mono bg-secondary px-1.5 py-0.5 rounded border border-hairline group-hover:text-info group-hover:border-info/30 transition-colors shrink-0">⌘K</span>
       </div>
+
+      {/* Global Help Drawer Trigger (?) */}
+      <button 
+        type="button"
+        onClick={() => openHelp("quick-start")}
+        className="size-10 rounded-full border border-hairline bg-card hover:border-info/40 hover:bg-info/5 grid place-items-center text-ink relative cursor-pointer transition-all shadow-sm group"
+        title="Open ScopeSense User Guide & Manual"
+      >
+        <HelpCircle className="size-4 text-subtext group-hover:text-info transition-colors" />
+      </button>
 
       {/* Interactive Bell Icon & Notifications Popover */}
       <div className="relative">

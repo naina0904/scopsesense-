@@ -628,10 +628,12 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
             logger.warning(f"No session found for {session_id}, falling back to general LLM response.")
             from backend.llm.manager import LLMManager
             from backend.config.settings import settings
+            from backend.chat.user_guide_context import get_user_guide_context
             provider = request.provider or settings.LLM_PROVIDER
             llm = LLMManager(provider=provider)
             try:
-                answer = llm.generate(f"You are an AI Copilot for software engineering project audits. Answer the user's question concisely and authoritatively: {request.question}")
+                ug_context = get_user_guide_context()
+                answer = llm.generate(f"{ug_context}\n\nYou are an AI Copilot for ScopeSense v2. Answer the user's question concisely, citing exact user guide formulas and troubleshooting matrices where relevant:\nUser Question: {request.question}")
             except Exception as e:
                 logger.error(f"Fallback LLM generation failed: {e}")
                 answer = "I am ready to assist! Please execute or select an audit session to analyze specific project delays and metrics."
@@ -648,16 +650,19 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
         if "[Row Context:" in request.question:
             from backend.llm.manager import LLMManager
             from backend.config.settings import settings
+            from backend.chat.user_guide_context import get_user_guide_context
             provider = request.provider or session.get("provider") or settings.LLM_PROVIDER
             llm = LLMManager(provider=provider)
+            ug_context = get_user_guide_context()
             prompt = (
-                "You are an expert software project management AI assistant. "
+                f"{ug_context}\n\n"
+                "You are an expert software project management AI assistant and ScopeSense Copilot. "
                 "You are provided with a specific 'Row Context' containing details about a single requirement or task. "
-                "Answer the user's question. If the question pertains to this task, use the provided context. "
+                "Answer the user's question. If the question pertains to this task, use the provided context and user guide definitions. "
                 "CRITICAL RULES: \n"
                 "1. If 'Actual Hours' is 0 but there is a ticket listed, it means the ticket exists but the developer hasn't logged time. Do not say the ticket is missing.\n"
                 "2. Positive variance means overrun; negative variance means under-budget or unstarted.\n"
-                "If the question is general or unrelated to the specific task, you should still answer it fully using your general knowledge.\n\n"
+                "If the question is general or conceptual, explicitly cite the formulas and thresholds from the canonical User Guide section above.\n\n"
                 f"{request.question}"
             )
             try:
@@ -677,9 +682,11 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
             # Instead of naive keyword matching, we can use LLM with the result payload summary
             from backend.llm.manager import LLMManager
             from backend.config.settings import settings
+            from backend.chat.user_guide_context import get_user_guide_context
             import json
             provider = request.provider or session.get("provider") or settings.LLM_PROVIDER
             llm = LLMManager(provider=provider)
+            ug_context = get_user_guide_context()
             
             # Create a concise summary of the project to fit in context
             variance_table = result_payload.get("variance_table", [])
@@ -695,13 +702,14 @@ async def chat(request: ChatbotRequest, db: Session = Depends(get_db)) -> Chatbo
                 "severity_score": result_payload.get("severity_score"),
             }
             prompt = (
-                "You are an expert project management AI assistant. "
+                f"{ug_context}\n\n"
+                "You are an expert project management AI assistant and ScopeSense Copilot. "
                 "You are provided with a summary of the project delays. "
                 "Answer the user's question. If the question relates to the project, use the summary. "
                 "CRITICAL RULES: \n"
                 "1. If 'Actual Hours' is 0, do not assume tickets don't exist. It usually means developers have not logged time (Time Spent) in their tracking tool.\n"
                 "2. Only reference data provided in the context; do not hallucinate metrics.\n"
-                "If the question is general or unrelated, still answer it fully using your general knowledge.\n"
+                "If the question asks about calculation logic, troubleshooting, or export capabilities, explicitly cite the exact formulas and instructions from the canonical User Guide section above.\n"
                 f"Project Summary: {json.dumps(summary)}\n\n"
                 f"User Question: {request.question}"
             )

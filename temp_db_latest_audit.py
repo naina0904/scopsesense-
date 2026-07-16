@@ -23,9 +23,14 @@ try:
             def name_of(f):
                 return f.get('feature_name') or f.get('name') or f.get('feature')
             print('SEMANTIC_FEATURES_COUNT:', len(sf))
-            print('FIRST_20_SEMANTIC_FEATURES:', [name_of(f) for f in sf[:20]])
-            print('FEATURE_OWNERSHIP_COUNT:', len(fo))
-            print('TIMELINE_ANALYSIS_COUNT:', len(ta))
+            vt = obj.get('variance_table', [])
+            print('VARIANCE_TABLE_COUNT:', len(vt))
+            total_planned = sum(float(x.get('planned_hours', 0)) for x in vt)
+            total_actual = sum(float(x.get('actual_hours', 0)) for x in vt)
+            print('TOTAL_PLANNED_HOURS_IN_VT:', total_planned)
+            print('TOTAL_ACTUAL_HOURS_IN_VT:', total_actual)
+            for x in vt:
+                print(f"  Req: {x.get('requirement')[:30]}... | Planned: {x.get('planned_hours')} | Actual: {x.get('actual_hours')}")
     cur.close()
 except Exception as e:
     import traceback

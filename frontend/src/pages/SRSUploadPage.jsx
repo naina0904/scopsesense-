@@ -5,10 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { UploadCloud, CheckCircle, Save, Plus, Trash2, ArrowUpRight, Sparkles, ShieldCheck, FileText, ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
 import { ScopeBadge } from "../components/ui/ScopeBadge";
+import { StageGuideCard } from "../components/ui/StageGuideCard";
 
 function SRSUploadPage() {
   const { setSRSFile, setExtractionConfirmed } = useSRS();
-  const { auditSession, fetchActiveSession, uploadSRSFile, getPlannedFeatures, savePlannedData, sessionLoading, error, setError, registerStepAction } = useAudit();
+  const { auditSession, fetchActiveSession, uploadSRSFile, getPlannedFeatures, savePlannedData, sessionLoading, error, setError, registerStepAction, openHelp } = useAudit();
   const navigate = useNavigate();
 
   const [features, setFeatures] = useState([]);
@@ -198,10 +199,17 @@ function SRSUploadPage() {
 
           <div className="space-y-5">
             <div className="soft-card p-6 bg-lavender/40">
-              <div className="flex items-center gap-2 text-xs text-ink/60"><Sparkles className="size-3.5" /> AI parsing</div>
-              <h4 className="mt-2 font-display text-xl">Smart extraction</h4>
-              <p className="text-sm text-ink/70 mt-2">We identify requirements, owners, dependencies and acceptance criteria automatically.</p>
-            </div>
+               <div className="flex items-center gap-2 text-xs text-ink/60"><Sparkles className="size-3.5" /> AI parsing</div>
+               <h4 className="mt-2 font-display text-xl">Smart extraction</h4>
+               <p className="text-sm text-ink/70 mt-2">We identify requirements, owners, dependencies and acceptance criteria automatically.</p>
+               <button
+                 type="button"
+                 onClick={() => openHelp("stage-1-upload-srs")}
+                 className="mt-4 px-4 py-2.5 rounded-xl bg-info/15 text-info font-bold text-sm inline-flex items-center gap-2 hover:bg-info/25 transition-colors cursor-pointer shadow-xs"
+               >
+                 <span>📖 View Complete Stage Guide & How This Works →</span>
+               </button>
+             </div>
             <div className="soft-card p-6">
               <div className="flex items-center gap-2 text-xs text-subtext"><ShieldCheck className="size-3.5" /> Privacy</div>
               <h4 className="mt-2 font-display text-xl">Your data stays yours</h4>
@@ -209,6 +217,12 @@ function SRSUploadPage() {
             </div>
           </div>
         </div>
+
+        <StageGuideCard
+          sectionId="stage-1-upload-srs"
+          title="📖 Complete Stage 1 Guide & Requirements Parsing Walkthrough"
+          description="Click to open the interactive manual, see how AI converts unstructured text into tasks, and understand budget estimations."
+        />
 
         {features.length > 0 && (() => {
           const table1Items = features

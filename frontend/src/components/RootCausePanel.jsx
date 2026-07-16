@@ -1,4 +1,5 @@
 import React from "react";
+import HelpTooltip from "./HelpTooltip";
 
 function RootCausePanel({ causality }) {
   const data = causality || [];
@@ -7,7 +8,9 @@ function RootCausePanel({ causality }) {
   }
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mt-6">
-      <h2 className="text-2xl font-bold mb-4 text-slate-200">Root Cause Analysis</h2>
+      <h2 className="text-2xl font-bold mb-4 text-slate-200 flex items-center gap-2">
+        <HelpTooltip termKey="Causal Finding / RCA">Root Cause Analysis</HelpTooltip>
+      </h2>
       <ul className="space-y-2 text-slate-300">
         {data.map((item, idx) => (
           <li key={idx} className="flex justify-between">

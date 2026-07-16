@@ -4,6 +4,7 @@ import { useAudit } from "../context/AuditContext";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, Database, Plus, RefreshCw, Plug, Trash2, ArrowUpRight, Check, Save, ArrowLeft, ArrowRight, ListTodo, X } from "lucide-react";
 import { PageHeader, PageBody } from "../components/ui/PageChrome";
+import { StageGuideCard } from "../components/ui/StageGuideCard";
 import api from "../api/client";
 
 function ProjectSetupPage() {
@@ -340,6 +341,12 @@ function ProjectSetupPage() {
             <p className="text-subtext mt-2">We successfully connected to your project, but found 0 tasks. Please check if your project is empty or try a different project key.</p>
           </div>
         ) : null}
+
+        <StageGuideCard
+          sectionId="stage-3-fetch-tasks"
+          title="Stage 3 Guide: Platform Integration & Actuals Sync"
+          description="Explore exact formulas for developer capacity, time conversion rules, and live syncing best practices."
+        />
 
         {showTasksModal && actualFeatures.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-ink/60 backdrop-blur-md animate-in fade-in duration-200">
