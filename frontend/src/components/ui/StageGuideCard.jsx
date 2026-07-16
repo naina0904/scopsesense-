@@ -1,6 +1,7 @@
 import React from "react";
-import { BookOpen, HelpCircle, ArrowRight, Sparkles } from "lucide-react";
+import { BookOpen, HelpCircle, ArrowRight, Sparkles, Download } from "lucide-react";
 import { useAudit } from "../../context/AuditContext";
+import { generateUserGuidePDF } from "../../utils/generateUserGuidePDF";
 
 export function StageGuideCard({
   sectionId,
@@ -33,9 +34,23 @@ export function StageGuideCard({
           </p>
         </div>
       </div>
-      <div className="px-5 py-3 rounded-full bg-info text-background font-semibold text-sm flex items-center gap-2 shrink-0 shadow-md group-hover:scale-105 group-hover:bg-info/90 transition-all self-end sm:self-center">
-        <span>Read Guide</span>
-        <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
+      <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            generateUserGuidePDF();
+          }}
+          className="px-4 py-3 rounded-full bg-card/80 hover:bg-card text-info border border-info/40 font-semibold text-sm flex items-center gap-2 shadow-sm hover:scale-105 transition-all"
+          title="Download Official PDF Manual (Professional Publication Format)"
+        >
+          <Download className="size-4 shrink-0" />
+          <span className="hidden md:inline">PDF Manual</span>
+        </button>
+        <div className="px-5 py-3 rounded-full bg-info text-background font-semibold text-sm flex items-center gap-2 shadow-md group-hover:scale-105 group-hover:bg-info/90 transition-all">
+          <span>Read Guide</span>
+          <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
+        </div>
       </div>
     </div>
   );

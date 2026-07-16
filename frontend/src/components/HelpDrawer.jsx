@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { X, BookOpen, HelpCircle, ChevronRight, Sparkles, ExternalLink, ArrowLeft } from "lucide-react";
+import { X, BookOpen, HelpCircle, ChevronRight, Sparkles, ExternalLink, ArrowLeft, Download } from "lucide-react";
 import { USER_GUIDE_CHAPTERS } from "../data/userGuideData";
 import { useAudit } from "../context/AuditContext";
+import { generateUserGuidePDF } from "../utils/generateUserGuidePDF";
 
 // Helper to parse inline **bold** and `code` formatting
 function parseInlineText(str) {
@@ -142,13 +143,23 @@ export default function HelpDrawer() {
             </div>
           </div>
 
-          <button
-            onClick={closeHelp}
-            className="size-9 rounded-full border border-hairline bg-card hover:bg-secondary hover:text-ink transition-colors grid place-items-center text-subtext cursor-pointer shadow-sm"
-            title="Close Help Drawer (Esc)"
-          >
-            <X className="size-4.5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={generateUserGuidePDF}
+              className="px-4 py-2 rounded-full bg-info text-background hover:opacity-90 font-semibold text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer shrink-0"
+              title="Download Official PDF Manual (Professional Publication Format)"
+            >
+              <Download className="size-3.5 shrink-0" />
+              <span>Download PDF Manual</span>
+            </button>
+            <button
+              onClick={closeHelp}
+              className="size-9 rounded-full border border-hairline bg-card hover:bg-secondary hover:text-ink transition-colors grid place-items-center text-subtext cursor-pointer shadow-sm shrink-0"
+              title="Close Help Drawer (Esc)"
+            >
+              <X className="size-4.5" />
+            </button>
+          </div>
         </div>
 
         {/* Main Body Grid: Left Navigation & Right Content */}
